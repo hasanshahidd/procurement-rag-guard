@@ -235,7 +235,7 @@ Each layer works on its own. The tests switch layers off one at a time by using 
 
 The guard in step 4 is a heuristic and will miss new phrasings. That is why the other steps do not depend on it, and why the regression test uses a model that obeys the injection perfectly.
 
-An independent review pass (a second AI agent asked to break the service) found several bypasses in an earlier version: reformatted numbers getting past the leak check, model text echoed through `blocked_actions`, a race between ingest and reads, a per-path rate limit key, a global id namespace, narrow approval wording and some guard misses (soft hyphen, Cyrillic look-alikes, list markers). Each one is fixed and has a regression test.
+An adversarial review of the first version, aimed only at breaking these controls, found several bypasses: reformatted numbers getting past the leak check, model text echoed through `blocked_actions`, a race between ingest and reads, a per-path rate limit key, a global id namespace, narrow approval wording and some guard misses (soft hyphen, Cyrillic look-alikes, list markers). Each one is fixed and has a regression test.
 
 ### Reproducing the incident
 
@@ -373,6 +373,6 @@ docs/             threat model
 
 ## AI assistance and reused code
 
-This project was written with substantial help from an AI coding assistant (Claude Code by Anthropic). It drafted most of the application code, tests, synthetic data, fine-tuning scripts and this README. The design, the test results and the fine-tuning numbers in this repo come from runs on the author's machine; no metrics were written by hand.
+I used an AI coding assistant (Claude Code) on this project to speed up drafting the code, tests, synthetic data and documentation, and for the adversarial review pass described above. I set the scope and design, and every test result, demo output and training run reported here was produced on my own machine. No metrics were written by hand.
 
 No code was copied from other repositories. The project depends on the open-source libraries listed in the requirements files (FastAPI, Pydantic, httpx, Uvicorn, pytest, PyTorch, Hugging Face transformers and PEFT) and on open-weight models from the Qwen2.5 family, which are used under their published licenses.
