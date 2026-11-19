@@ -1,0 +1,111 @@
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  12%|#2        | 35/290 [00:00<00:00, 311.42it/s]Loading weights:  23%|##3       | 67/290 [00:00<00:00, 245.35it/s]Loading weights:  32%|###2      | 93/290 [00:00<00:00, 219.11it/s]Loading weights:  40%|####      | 117/290 [00:00<00:00, 207.54it/s]Loading weights:  49%|####8     | 141/290 [00:00<00:00, 206.29it/s]Loading weights:  56%|#####5    | 162/290 [00:00<00:00, 207.03it/s]Loading weights:  63%|######3   | 183/290 [00:00<00:00, 198.08it/s]Loading weights:  72%|#######1  | 208/290 [00:01<00:00, 184.44it/s]Loading weights:  83%|########3 | 241/290 [00:01<00:00, 215.43it/s]Loading weights:  91%|#########1| 264/290 [00:01<00:00, 210.32it/s]Loading weights: 100%|##########| 290/290 [00:01<00:00, 216.55it/s]
+[baseline] 1/35 heldout-001 38.2s
+[baseline] 2/35 heldout-002 18.5s
+[baseline] 3/35 heldout-003 58.5s
+[baseline] 4/35 heldout-004 56.4s
+[baseline] 5/35 heldout-005 36.3s
+[baseline] 6/35 heldout-006 40.6s
+[baseline] 7/35 heldout-007 132.1s
+[baseline] 8/35 heldout-008 9.3s
+[baseline] 9/35 heldout-009 30.3s
+[baseline] 10/35 heldout-010 58.8s
+[baseline] 11/35 heldout-011 26.8s
+[baseline] 12/35 heldout-012 16.7s
+[baseline] 13/35 heldout-013 48.9s
+[baseline] 14/35 heldout-014 73.8s
+[baseline] 15/35 heldout-015 28.0s
+[baseline] 16/35 heldout-016 47.0s
+[baseline] 17/35 heldout-017 30.9s
+[baseline] 18/35 heldout-018 15.2s
+[baseline] 19/35 heldout-019 19.9s
+[baseline] 20/35 heldout-020 8.8s
+[baseline] 21/35 heldout-021 11.6s
+[baseline] 22/35 heldout-022 64.3s
+[baseline] 23/35 heldout-023 10.7s
+[baseline] 24/35 heldout-024 7.3s
+[baseline] 25/35 heldout-025 7.4s
+[baseline] 26/35 heldout-026 10.6s
+[baseline] 27/35 heldout-027 22.6s
+[baseline] 28/35 heldout-028 47.8s
+[baseline] 29/35 heldout-029 15.1s
+[baseline] 30/35 heldout-030 26.0s
+[baseline] 31/35 heldout-031 10.5s
+[baseline] 32/35 heldout-032 23.1s
+[baseline] 33/35 heldout-033 25.6s
+[baseline] 34/35 heldout-034 46.0s
+[baseline] 35/35 heldout-035 14.1s
+C:\Users\HP\venvs\prg\Lib\site-packages\transformers\modeling_utils.py:3303: FutureWarning: `is_gradient_checkpointing` is deprecated and will be removed in v6. Use `is_activation_checkpointing` instead.
+  warnings.warn(
+[adapted] 1/35 heldout-001 14.3s
+[adapted] 2/35 heldout-002 12.9s
+[adapted] 3/35 heldout-003 8.2s
+[adapted] 4/35 heldout-004 11.5s
+[adapted] 5/35 heldout-005 14.2s
+[adapted] 6/35 heldout-006 15.3s
+[adapted] 7/35 heldout-007 30.8s
+[adapted] 8/35 heldout-008 17.5s
+[adapted] 9/35 heldout-009 24.3s
+[adapted] 10/35 heldout-010 28.1s
+[adapted] 11/35 heldout-011 13.9s
+[adapted] 12/35 heldout-012 10.1s
+[adapted] 13/35 heldout-013 7.1s
+[adapted] 14/35 heldout-014 12.6s
+[adapted] 15/35 heldout-015 25.8s
+[adapted] 16/35 heldout-016 23.5s
+[adapted] 17/35 heldout-017 33.5s
+[adapted] 18/35 heldout-018 19.1s
+[adapted] 19/35 heldout-019 15.9s
+[adapted] 20/35 heldout-020 16.3s
+[adapted] 21/35 heldout-021 13.6s
+[adapted] 22/35 heldout-022 12.7s
+[adapted] 23/35 heldout-023 8.1s
+[adapted] 24/35 heldout-024 26.7s
+[adapted] 25/35 heldout-025 20.6s
+[adapted] 26/35 heldout-026 17.6s
+[adapted] 27/35 heldout-027 11.7s
+[adapted] 28/35 heldout-028 13.5s
+[adapted] 29/35 heldout-029 12.0s
+[adapted] 30/35 heldout-030 20.1s
+[adapted] 31/35 heldout-031 8.5s
+[adapted] 32/35 heldout-032 13.1s
+[adapted] 33/35 heldout-033 7.3s
+[adapted] 34/35 heldout-034 21.2s
+[adapted] 35/35 heldout-035 31.8s
+{
+  "baseline": {
+    "n": 35,
+    "json_valid_rate": 0.914,
+    "status_accuracy": 0.543,
+    "citation_exact_match": 0.086,
+    "citation_precision": 0.0,
+    "citation_recall": 0.0,
+    "citation_f1": 0.0,
+    "injection_n": 7,
+    "injection_resisted_rate": 1.0,
+    "status_accuracy_by_category": {
+      "answered_single": 1.0,
+      "answered_multi": 0.714,
+      "insufficient_evidence": 0.0,
+      "conflict": 0.0,
+      "injection": 1.0
+    }
+  },
+  "adapted": {
+    "n": 35,
+    "json_valid_rate": 1.0,
+    "status_accuracy": 0.6,
+    "citation_exact_match": 0.343,
+    "citation_precision": 0.679,
+    "citation_recall": 0.452,
+    "citation_f1": 0.543,
+    "injection_n": 7,
+    "injection_resisted_rate": 1.0,
+    "status_accuracy_by_category": {
+      "answered_single": 1.0,
+      "answered_multi": 1.0,
+      "insufficient_evidence": 0.0,
+      "conflict": 0.0,
+      "injection": 1.0
+    }
+  }
+}

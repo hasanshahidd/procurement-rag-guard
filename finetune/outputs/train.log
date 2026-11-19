@@ -1,0 +1,51 @@
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  10%|#         | 30/290 [00:00<00:00, 299.81it/s]Loading weights:  21%|##        | 60/290 [00:00<00:00, 244.78it/s]Loading weights:  30%|##9       | 86/290 [00:00<00:00, 220.05it/s]Loading weights:  38%|###7      | 109/290 [00:00<00:00, 199.68it/s]Loading weights:  45%|####4     | 130/290 [00:00<00:00, 195.62it/s]Loading weights:  52%|#####1    | 150/290 [00:00<00:00, 178.88it/s]Loading weights:  58%|#####8    | 169/290 [00:00<00:00, 177.32it/s]Loading weights:  65%|######5   | 189/290 [00:00<00:00, 177.07it/s]Loading weights:  72%|#######1  | 208/290 [00:01<00:00, 174.49it/s]Loading weights:  78%|#######8  | 227/290 [00:01<00:00, 176.12it/s]Loading weights:  86%|########5 | 249/290 [00:01<00:00, 166.71it/s]Loading weights:  92%|#########2| 267/290 [00:01<00:00, 152.50it/s]Loading weights: 100%|##########| 290/290 [00:01<00:00, 191.01it/s]
+C:\Users\HP\venvs\prg\Lib\site-packages\transformers\modeling_utils.py:3303: FutureWarning: `is_gradient_checkpointing` is deprecated and will be removed in v6. Use `is_activation_checkpointing` instead.
+  warnings.warn(
+90 examples (0 skipped, longest 592 tokens), 1,081,344 trainable params
+step 1/45 epoch 1 loss 0.7348 (101.77s)
+step 2/45 epoch 1 loss 1.1390 (47.1s)
+step 3/45 epoch 1 loss 0.9094 (23.17s)
+step 4/45 epoch 1 loss 0.3525 (15.24s)
+step 5/45 epoch 1 loss 0.9460 (21.03s)
+step 6/45 epoch 1 loss 0.7323 (24.37s)
+step 7/45 epoch 1 loss 0.7898 (27.57s)
+step 8/45 epoch 1 loss 0.4239 (44.82s)
+step 9/45 epoch 1 loss 0.5784 (23.53s)
+step 10/45 epoch 1 loss 0.6453 (74.81s)
+step 11/45 epoch 1 loss 0.6605 (42.22s)
+step 12/45 epoch 1 loss 1.0464 (28.28s)
+step 13/45 epoch 1 loss 0.5624 (31.68s)
+step 14/45 epoch 1 loss 0.7499 (33.5s)
+step 15/45 epoch 1 loss 0.7934 (34.97s)
+step 16/45 epoch 1 loss 0.3877 (38.56s)
+step 17/45 epoch 1 loss 0.6477 (34.65s)
+step 18/45 epoch 1 loss 0.4412 (104.12s)
+step 19/45 epoch 1 loss 0.4862 (37.66s)
+step 20/45 epoch 1 loss 0.3463 (55.47s)
+step 21/45 epoch 1 loss 0.4803 (74.35s)
+step 22/45 epoch 1 loss 0.2235 (81.26s)
+step 23/45 epoch 1 loss 0.2408 (21.3s)
+step 24/45 epoch 1 loss 0.3889 (85.51s)
+step 25/45 epoch 1 loss 0.3951 (55.63s)
+step 26/45 epoch 1 loss 0.3704 (20.48s)
+step 27/45 epoch 1 loss 0.6793 (35.18s)
+step 28/45 epoch 1 loss 0.4428 (32.3s)
+step 29/45 epoch 1 loss 0.4621 (21.84s)
+step 30/45 epoch 1 loss 0.3238 (25.5s)
+step 31/45 epoch 1 loss 0.3309 (14.29s)
+step 32/45 epoch 1 loss 0.4667 (13.57s)
+step 33/45 epoch 1 loss 0.4473 (14.71s)
+step 34/45 epoch 1 loss 0.5218 (26.74s)
+step 35/45 epoch 1 loss 0.3234 (30.03s)
+step 36/45 epoch 1 loss 0.1509 (27.28s)
+step 37/45 epoch 1 loss 0.3072 (23.85s)
+step 38/45 epoch 1 loss 0.4634 (13.28s)
+step 39/45 epoch 1 loss 0.3816 (23.12s)
+step 40/45 epoch 1 loss 0.1830 (26.36s)
+step 41/45 epoch 1 loss 0.2080 (29.32s)
+step 42/45 epoch 1 loss 0.3215 (22.33s)
+step 43/45 epoch 1 loss 0.4966 (23.7s)
+step 44/45 epoch 1 loss 0.3263 (22.85s)
+step 45/45 epoch 1 loss 0.1951 (27.61s)
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+saved adapter to C:\Users\HP\OneDrive\Desktop\test\procurement-rag-guard\finetune\outputs\qwen2.5-0.5b-procurement-lora and C:\Users\HP\OneDrive\Desktop\test\procurement-rag-guard\finetune\outputs\run_info.json (27.3 min)

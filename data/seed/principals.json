@@ -1,0 +1,6 @@
+[
+  {"api_key": "demo-harbor-buyer", "tenant_id": "harbor", "role": "buyer", "label": "Harbor Point Clinics buyer (synthetic)"},
+  {"api_key": "demo-harbor-requester", "tenant_id": "harbor", "role": "requester", "label": "Harbor Point Clinics requester (synthetic)"},
+  {"api_key": "demo-harbor-approver", "tenant_id": "harbor", "role": "approver", "label": "Harbor Point Clinics approver (synthetic)"},
+  {"api_key": "demo-redline-buyer", "tenant_id": "redline", "role": "buyer", "label": "Redline Freight buyer (synthetic)"}
+]

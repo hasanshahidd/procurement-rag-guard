@@ -1,0 +1,102 @@
+"""Failure handling: bad model output, model outages, unexpected errors, audit trail."""
+
+from __future__ import annotations
+
+import json
+
+import httpx
+import pytest
+
+from app.config import Settings
+from app.llm import LLMUnavailableError, OllamaLLM, build_llm
+from conftest import HARBOR_BUYER, FakeLLM, ask, reply
+
+QUESTION = "What is the status of PR-1042?"
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "Sure! PR-1042 is pending.",
+        '{"status": "maybe", "answer": "x", "citations": []}',
+        '{"status": "answered", "answer": 42, "citations": []}',
+        '{"status": "answered", "answer": "x", "citations": "TCK-H-101"}',
+        "[1, 2, 3]",
+        "",
+    ],
+)
+def test_contract_violations_abstain(make_client, raw):
+    body = ask(make_client(FakeLLM(raw)), QUESTION, HARBOR_BUYER).json()
+    assert body["status"] == "abstained"
+    assert body["reason"] == "model_output_unverifiable"
+    assert body["citations"] == []
+
+
+def test_json_wrapped_in_prose_and_fences_is_accepted(make_client):
+    raw = "Here you go:\n```json\n" + reply("answered", "Pending approval.", ["TCK-H-101"]) + "\n```"
+    assert ask(make_client(FakeLLM(raw)), QUESTION, HARBOR_BUYER).json()["status"] == "answered"
+
+
+def test_model_outage_is_a_503(make_client):
+    llm = FakeLLM(raises=LLMUnavailableError("Ollama not reachable: ConnectError"))
+    resp = ask(make_client(llm), QUESTION, HARBOR_BUYER)
+    assert resp.status_code == 503
+    assert resp.json()["error"]["code"] == "llm_unavailable"
+
+
+def test_unexpected_error_is_a_500_without_internals(make_client):
+    resp = ask(make_client(FakeLLM(raises=RuntimeError("secret stack detail"))), QUESTION, HARBOR_BUYER)
+    assert resp.status_code == 500
+    assert resp.json()["error"]["code"] == "internal_error"
+    assert "secret stack detail" not in resp.text
+
+
+def test_ollama_backend_maps_transport_errors():
+    llm = OllamaLLM("http://127.0.0.1:9", "qwen2.5:1.5b", timeout_s=2)
+    with pytest.raises(LLMUnavailableError):
+        llm.chat([{"role": "user", "content": "hi"}])
+    assert llm.health()["reachable"] is False
+
+
+@pytest.mark.parametrize(("status", "fragment"), [(404, "ollama pull"), (500, "HTTP 500")])
+def test_ollama_backend_maps_http_errors(status, fragment):
+    llm = OllamaLLM("http://ollama.test", "qwen2.5:1.5b", timeout_s=2)
+    llm._client = httpx.Client(
+        base_url="http://ollama.test", transport=httpx.MockTransport(lambda r: httpx.Response(status))
+    )
+    with pytest.raises(LLMUnavailableError, match=fragment):
+        llm.chat([{"role": "user", "content": "hi"}])
+
+
+def test_ollama_backend_sends_json_mode_and_returns_content():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json={"message": {"role": "assistant", "content": "{}"}})
+
+    llm = OllamaLLM("http://ollama.test", "qwen2.5:1.5b", timeout_s=2)
+    llm._client = httpx.Client(base_url="http://ollama.test", transport=httpx.MockTransport(handler))
+    assert llm.chat([{"role": "user", "content": "hi"}]) == "{}"
+    assert seen["format"] == "json" and seen["options"]["temperature"] == 0 and seen["stream"] is False
+
+
+def test_unknown_backend_is_rejected():
+    with pytest.raises(ValueError):
+        build_llm(Settings(llm_backend="openai"))
+
+
+def test_transformers_backend_is_lazy_and_names_the_adapter():
+    llm = build_llm(Settings(llm_backend="transformers", lora_adapter="finetune/outputs/adapter"))
+    assert llm.name == "transformers:Qwen/Qwen2.5-0.5B-Instruct+lora:finetune/outputs/adapter"
+    assert llm.health() == {"reachable": True, "detail": "loads on first request"}
+
+
+def test_every_answer_is_audited_without_credentials(make_client, settings):
+    body = ask(make_client(FakeLLM(reply("answered", "Pending.", ["TCK-H-101"]))), QUESTION, HARBOR_BUYER).json()
+    lines = settings.audit_path.read_text(encoding="utf-8").splitlines()
+    record = json.loads(lines[-1])
+    assert record["trace_id"] == body["trace_id"]
+    assert record["tenant_id"] == "harbor" and record["status"] == "answered"
+    assert record["citations"][0]["sha256"] == body["citations"][0]["content_sha256"]
+    assert "demo-harbor-buyer" not in lines[-1]

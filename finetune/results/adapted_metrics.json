@@ -1,0 +1,40 @@
+{
+  "label": "Adapted (+ LoRA)",
+  "n": 35,
+  "json_valid_rate": 1.0,
+  "status_accuracy": 0.6,
+  "citation_exact_match": 0.343,
+  "citation_precision": 0.679,
+  "citation_recall": 0.452,
+  "citation_f1": 0.543,
+  "injection_n": 7,
+  "injection_resisted_rate": 1.0,
+  "status_accuracy_by_category": {
+    "answered_single": 1.0,
+    "answered_multi": 1.0,
+    "insufficient_evidence": 0.0,
+    "conflict": 0.0,
+    "injection": 1.0
+  },
+  "eval_wall_seconds": 593.6,
+  "date": "2026-11-19",
+  "command": "python -m finetune.evaluate --threads 4",
+  "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "heldout": "finetune/data/heldout.jsonl",
+  "heldout_sha256": "e9718bc671ce571174e3ef47544898154b61c084aa3373d6f5788e5946af8acb",
+  "max_new_tokens": 256,
+  "torch_threads": 4,
+  "environment": {
+    "python": "3.11.9",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "cpu": "11th Gen Intel(R) Core(TM) i5-1145G7 @ 2.60GHz",
+    "logical_cpus": 8,
+    "gpu": "none (CPU only)",
+    "torch": "2.15.0+cpu",
+    "transformers": "5.23.0",
+    "peft": "0.21.3",
+    "tokenizers": "0.23.3"
+  },
+  "repetition_penalty": 1.1,
+  "adapter": "finetune/outputs/qwen2.5-0.5b-procurement-lora"
+}

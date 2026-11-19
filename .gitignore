@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+logs/
+reports/repro_audit.jsonl
+finetune/outputs/**/checkpoint-*/
+.env
+.idea/
+.vscode/
