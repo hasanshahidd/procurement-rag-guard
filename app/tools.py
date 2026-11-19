@@ -48,6 +48,8 @@ TOOLS: dict[str, ToolSpec] = {
 
 def run_tool(name: str, store: Store, principal: Principal, arg: str) -> list[Document]:
     spec = TOOLS[name]
+    if not spec.read_only:  # the agent may only read; a write tool must go through a human workflow
+        raise ToolPermissionError(f"{name} is not read-only and cannot be called by the agent")
     if spec.required_clearance not in principal.clearance:
         raise ToolPermissionError(f"{principal.role} may not call {name}")
     results = spec.run(store, principal, arg)

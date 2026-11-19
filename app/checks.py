@@ -19,11 +19,16 @@ MIN_SUPPORT = 2  # a cited sentence must share one id or number, or two words, w
 
 _NUM_GROUP = re.compile(r"\d+(?:[\s.,_'/\-  ]+\d+)*")
 _PR_ID = re.compile(r"\bPR-\d+\b", re.I)
+_ITEM_ID = re.compile(r"\b(?:[A-Z]{3}-\d{2}-[A-Z]{3}|PR-\d+)\b", re.I)  # SKUs and purchase requests
+_RECORD_ID = re.compile(r"\b[A-Z]{1,5}(?:-[A-Z]{1,3})?-\d+\b")  # TCK-H-102, KB-001, TOOL-Q-5531, Q-5531
+_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}")  # also the date part of 2026-10-05T03:12Z
 _APPROVAL_WORD = re.compile(
     r"\b(?:approved|authori[sz]ed|signed[- ]?off|released|green[- ]?lit|cleared|okayed|ok'?d)\b"
     r"|\b(?:go-ahead|green light|good to go|(?:may|can) (?:now )?proceed|cleared to proceed)\b"
     r"|\b(?:i|we)(?:'ve|'ll| have| will| am| are)?\s+(?:now\s+)?approv(?:e|ing)\b"
-    r"|\bapproval\s+(?:is\s+|has been\s+)?(?:granted|given|complete|completed|done)\b"
+    r"|\bapproval(?:\s+for\s+[\w-]+)?\s*(?::|-|\bis\b|\bwas\b|\bhas been\b|\bhad been\b)?\s*"
+    r"(?:granted|given|complete|completed|done|obtained|received|secured)\b"
+    r"|\b(?:granted|gave|given|obtained|received|secured|got)\s+(?:(?!before\b|for\b|pending\b)[\w-]+\s+){0,2}approval\b"
     r"|\b(?:purchase|order|request|po|pr-\d+)\s+(?:is\s+|was\s+|has been\s+)?(?:accepted|confirmed)\b",
     re.I,
 )
@@ -31,13 +36,25 @@ _APPROVAL_WORD = re.compile(
 _NOT_A_PURCHASE_AFTER = re.compile(
     r"^\s+(?:supplier|vendor|policy|policies|list|budget|catalogue|catalog|device|model|sku|template|form)s?\b", re.I
 )
-# Wording right before the approval word that turns it into a negation or a
-# rule ("has not been approved", "can be signed off by"), not a claim.
-_NOT_A_CLAIM_BEFORE = re.compile(
-    r"(?:\bnot|\bnever|n't|\byet to be|\bpending|\bawaiting|\bcan be|\bmust be|\bmay be|\bshould be|"
-    r"\bneeds? to be|\bto be|\bwill be|\bunless|\bonce|\bif|\bbefore|\buntil|\bafter|"
-    r"\brequires?|\brequired|\bneeds?)"
-    r"\s+(?:[\w-]+\s+){0,3}$",
+# Text right before an approval word that makes it a non-claim. Each form is
+# tied to the word itself, so "After review PR-1042 is approved" or "moved from
+# pending to approved" still count as claims.
+_NEGATED_BEFORE = re.compile(  # "has not been approved", "never formally signed off"
+    r"(?:\bnot|\bnever|n't|\bno|\bno longer|\byet to be|\bawaiting|\bpending|\bwithout)"
+    r"(?:\s+(?!(?:to|into|and|but|then|now|is|was|are|were)\b)[\w-]+){0,3}\s+$",
+    re.I,
+)
+_RULE_BEFORE = re.compile(  # "can be signed off by", "needs to be approved", "requires approved quotes"
+    r"(?:\b(?:can|must|may|might|should|will|would|could|shall)(?:\s+(?:only|first|still|also|not|never|then))?\s+be"
+    r"|(?<!happens )(?<!happened )(?<!seems )(?<!appears )(?<!out )(?<!proved )\bto\s+be"
+    r"|\brequires?|\brequired)\s+(?:\w+ly\s+)?$",
+    re.I,
+)
+_CONDITION_BEFORE = re.compile(  # "once approved", "before a purchase is approved", "until it is approved"
+    r"\b(?:once|if|unless|until|before|whether)\s+"
+    r"(?:(?:it|they|this|that|pr-\d+|(?:the|a|an)\s+[\w-]+(?:\s+[\w-]+)?|purchase|request|order)\s+)?"
+    # present or future only: "before it was approved" reports a past approval, so it stays a claim
+    r"(?:(?:is|are|gets?|has|have)(?:\s+been)?|(?:can|will|would|must)\s+be)?\s*$",
     re.I,
 )
 _IDENTIFIER = re.compile(r"^[a-z][a-z_]{2,39}$")
@@ -94,10 +111,14 @@ def ungrounded_numbers(answer: str, allowed: set[str]) -> set[str]:
 
 
 def claims_approval(sentence: str) -> bool:
-    return any(
-        not _NOT_A_CLAIM_BEFORE.search(sentence[: m.start()]) and not _NOT_A_PURCHASE_AFTER.match(sentence[m.end() :])
-        for m in _APPROVAL_WORD.finditer(sentence)
-    )
+    """Default deny: any approval wording is a claim unless it is negated, a rule or a condition."""
+    for m in _APPROVAL_WORD.finditer(sentence):
+        before, after = sentence[: m.start()], sentence[m.end() :]
+        if _NOT_A_PURCHASE_AFTER.match(after) or re.search(r"\b(?:not|never|no)\b|n't", m.group(0), re.I):
+            continue
+        if not any(rule.search(before) for rule in (_NEGATED_BEFORE, _RULE_BEFORE, _CONDITION_BEFORE)):
+            return True
+    return False
 
 
 def unsupported_approval(answer: str, approved_prs: set[str]) -> bool:
@@ -124,11 +145,46 @@ def support_score(excerpt: str, answer: str) -> int:
 def contradicting_figures(excerpt: str, answer: str) -> bool:
     """True when the cited sentence states amounts and the answer states amounts, and none match.
 
-    "Price is 1,180 AUD" cannot be the support for an answer of "990 AUD".
+    "Price is 1,180 AUD" cannot be the support for an answer of "990 AUD". Ids
+    (PR-2210, LAP-14-STD, TCK-H-102) and dates are not amounts, so they are left out.
     """
-    cited = {n for n in numbers_in(excerpt) if len(n) >= 3}
-    claimed = {n for m in _NUM_GROUP.finditer(ascii_digits(answer)) for n in _number_candidates(m.group(0))}
+    _, cited = _item_figures(excerpt)
+    _, claimed = _item_figures(answer)
     return bool(cited and claimed and not cited & claimed)
+
+
+def _item_figures(sentence: str) -> tuple[set[str], set[str]]:
+    """SKU and PR ids in a sentence, and its figures (3+ digits) outside ids and dates."""
+    text = ascii_digits(sentence)
+    ids = {i.upper() for i in _ITEM_ID.findall(text)}
+    rest = _DATE.sub(" ", _RECORD_ID.sub(" ", _ITEM_ID.sub(" ", text)))
+    return ids, {n for m in _NUM_GROUP.finditer(rest) for n in _number_candidates(m.group(0))}
+
+
+def _same_item(a: set[str], b: set[str]) -> bool:
+    """False only when both name items of the same kind (SKU or PR) and share none."""
+    for is_pr in (True, False):
+        x = {i for i in a if i.startswith("PR-") == is_pr}
+        y = {i for i in b if i.startswith("PR-") == is_pr}
+        if x and y and not x & y:
+            return False
+    return True
+
+
+def misattributed_figures(answer: str, source_texts: list[str]) -> bool:
+    """True when the answer ties a figure to an item, but every source sentence with that figure is about other items.
+
+    "TAB-10-RUG costs 1,180 AUD" fails when 1,180 only appears in the LAP-14-STD
+    sentence. A figure in a sentence that names no item (a policy threshold) is fine.
+    """
+    held = [_item_figures(text[s:e]) for text in source_texts for s, e in sentence_spans(text)]
+    for start, end in sentence_spans(answer):
+        ids, figures = _item_figures(answer[start:end])
+        for figure in figures if ids else ():
+            holders = [held_ids for held_ids, nums in held if figure in nums]
+            if holders and not any(_same_item(ids, held_ids) for held_ids in holders):
+                return True
+    return False
 
 
 _QUESTION_WORDS = frozenset(
@@ -142,10 +198,17 @@ _PROPER_NAME = re.compile(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b")
 
 
 def question_names(question: str) -> list[str]:
-    """Capitalised names in the question (companies, vendors, sites), minus question words."""
+    """Capitalised names in the question (companies, vendors, sites), minus question words.
+
+    The first word of a sentence is capitalised anyway ("Explain why...", "Summarise..."), so it is not counted.
+    """
     names = []
     for m in _PROPER_NAME.finditer(question):
-        words = [w for w in m.group(0).split() if w.lower() not in _QUESTION_WORDS]
+        words = m.group(0).split()
+        lead = question[: m.start()].rstrip()
+        if not lead or lead[-1] in ".!?:;":
+            words = words[1:]
+        words = [w for w in words if w.lower() not in _QUESTION_WORDS]
         if words:
             names.append(" ".join(words))
     return list(dict.fromkeys(names))
@@ -163,14 +226,23 @@ def unmentioned_names(question: str, shown_text: str) -> list[str]:
 
 
 def run_output_checks(
-    answer: str, allowed: set[str], approved_prs: set[str], trusted: set[str] | None = None
+    answer: str,
+    allowed: set[str],
+    approved_prs: set[str],
+    trusted: set[str] | None = None,
+    source_texts: list[str] | None = None,
 ) -> list[str]:
-    """allowed: numbers in the cited sources and the question. trusted: the subset backed by curated records."""
+    """allowed: numbers in the cited sources and the question. trusted: the subset backed by curated records.
+
+    source_texts: what the model was shown of the backing sources, for the figure-to-item check.
+    """
     failures = []
     if ungrounded_numbers(answer, allowed):
         failures.append("ungrounded_number_in_answer")
     elif trusted is not None and ungrounded_numbers(answer, trusted):
         failures.append("figure_only_in_unverified_source")
+    elif source_texts and misattributed_figures(answer, source_texts):
+        failures.append("figure_attributed_to_wrong_item")
     if unsupported_approval(answer, approved_prs):
         failures.append("unsupported_approval_claim")
     if instruction_like(answer):

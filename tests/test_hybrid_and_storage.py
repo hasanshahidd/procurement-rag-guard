@@ -100,6 +100,31 @@ def test_ollama_embedder_caches_documents_and_maps_errors():
         emb.embed_query("q")
 
 
+@pytest.mark.parametrize(
+    "body", [b"<html>proxy</html>", b"[]", b'{"embeddings": null}', b'{"embeddings": [["x"]]}', b'{"embeddings": [[]]}']
+)
+def test_ollama_embedder_rejects_malformed_replies(body):
+    emb = OllamaEmbedder("http://ollama.test", "nomic-embed-text")
+    emb._client = httpx.Client(
+        base_url="http://ollama.test", transport=httpx.MockTransport(lambda r: httpx.Response(200, content=body))
+    )
+    with pytest.raises(EmbeddingUnavailableError):
+        emb.embed_query("q")
+
+
+class _MismatchedEmbedder(FakeEmbedder):
+    def embed_query(self, text: str) -> list[float]:
+        return [1.0, 0.0]  # different size from the document vectors
+
+
+def test_hybrid_falls_back_to_bm25_on_mismatched_vector_sizes(make_client):
+    llm = FakeLLM(reply("answered", "PR-1042 is pending approval.", ["TCK-H-101"]))
+    client = make_client(llm, embedder=_MismatchedEmbedder(), retrieval_mode="hybrid")
+    body = ask(client, "What is the status of PR-1042?", HARBOR_BUYER).json()
+    assert body["status"] == "answered"
+    assert "embedding sizes differ" in body["agents"][0]["summary"]
+
+
 def test_ingested_records_survive_a_restart(make_client, tmp_path):
     db = tmp_path / "store.sqlite3"
     first = make_client(db_path=db)

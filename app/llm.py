@@ -56,14 +56,17 @@ class OllamaLLM:
         if resp.status_code != 200:
             raise LLMUnavailableError(f"Ollama returned HTTP {resp.status_code}")
         try:
-            return resp.json().get("message", {}).get("content", "")
-        except ValueError as exc:
-            raise LLMUnavailableError("Ollama returned a body that is not JSON") from exc
+            content = resp.json()["message"]["content"]
+        except (ValueError, KeyError, TypeError) as exc:
+            raise LLMUnavailableError("Ollama returned a body that is not a chat reply") from exc
+        if not isinstance(content, str):
+            raise LLMUnavailableError("Ollama returned a chat reply without text content")
+        return content
 
     def health(self) -> dict:
         try:
             tags = self._client.get("/api/tags", timeout=3).json().get("models", [])
-        except (httpx.HTTPError, ValueError):
+        except (httpx.HTTPError, ValueError, AttributeError):
             return {"reachable": False, "detail": "Ollama server not reachable"}
         names = {t.get("name", "") for t in tags}
         pulled = self._model in names or f"{self._model}:latest" in names

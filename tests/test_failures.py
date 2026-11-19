@@ -121,12 +121,29 @@ def test_ingest_is_audited(make_client, settings):
     assert record["content_sha256"] == created["content_sha256"] and record["role"] == "buyer"
 
 
-def test_ollama_non_json_body_is_a_503_not_a_500():
+@pytest.mark.parametrize(
+    "body",
+    [
+        b"<html>proxy error</html>",
+        b"[1, 2]",
+        b'{"done": true}',
+        b'{"message": {"content": null}}',
+        b'{"message": "text"}',
+    ],
+)
+def test_ollama_malformed_reply_is_unavailable_not_a_crash(body):
     llm = OllamaLLM("http://ollama.test", "qwen2.5:1.5b", timeout_s=2)
-    transport = httpx.MockTransport(lambda r: httpx.Response(200, content=b"<html>proxy error</html>"))
+    transport = httpx.MockTransport(lambda r: httpx.Response(200, content=body))
     llm._client = httpx.Client(base_url="http://ollama.test", transport=transport)
-    with pytest.raises(LLMUnavailableError, match="not JSON"):
+    with pytest.raises(LLMUnavailableError, match="chat reply"):
         llm.chat([{"role": "user", "content": "hi"}])
+
+
+def test_ollama_health_survives_a_malformed_tags_reply():
+    llm = OllamaLLM("http://ollama.test", "qwen2.5:1.5b", timeout_s=2)
+    transport = httpx.MockTransport(lambda r: httpx.Response(200, content=b"[]"))
+    llm._client = httpx.Client(base_url="http://ollama.test", transport=transport)
+    assert llm.health()["reachable"] is False
 
 
 def test_long_sources_are_truncated_to_the_prompt_budget():

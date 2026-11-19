@@ -55,7 +55,7 @@ _DOC_ID = re.compile(r"^[A-Z]{2,5}-[A-Z0-9][A-Z0-9-]{0,30}$")
 # Which question words make a structured fact relevant for conflict checks.
 FACT_TOPICS: dict[str, frozenset[str]] = {
     "lead_time_business_days": frozenset(
-        "ship shipping shipped deliver delivery lead eta arrive dispatch when".split()
+        "ship shipping shipped ships deliver delivered delivery lead eta arrive arrival dispatch when long days".split()
     ),
     "unit_price_aud": frozenset("price prices pricing cost unit pay negotiated".split()),
     "list_price_aud": frozenset("list catalogue catalog rrp".split()),
@@ -180,7 +180,7 @@ class Pipeline:
         cited = self._check_citations(run, out, by_id)
         failures = self._output_checks(question, out.answer, cited or context)
         run.security.output_checks.extend(failures)
-        conflicts = find_conflicts(question, context, run.fact_pool)
+        conflicts = find_conflicts(question, context, run.fact_pool, cited, out.answer)
         by_id.update({d.id: d for d in run.fact_pool})
         run.step(
             "verifier", f"citations ok={[d.id for d in cited]}, checks failed={failures}, conflicts={len(conflicts)}"
@@ -254,7 +254,8 @@ class Pipeline:
             if key.startswith("pr_status:") and value == "approved"
         }
         trusted = typed | numbers_of([d for d in backing if d.trusted])
-        return run_output_checks(answer, typed | numbers_of(backing), approved, trusted)
+        shown = [d.scan.clean_text[:MAX_SOURCE_CHARS] for d in backing]
+        return run_output_checks(answer, typed | numbers_of(backing), approved, trusted, shown)
 
     def _finish(
         self,
@@ -303,23 +304,33 @@ def _replacements(
     return found
 
 
-def find_conflicts(question: str, context: list[Document], pool: list[Document] | None = None) -> list[Conflict]:
-    """Facts relevant to the question that disagree.
+def find_conflicts(
+    question: str,
+    context: list[Document],
+    pool: list[Document] | None = None,
+    cited: list[Document] | None = None,
+    answer: str = "",
+) -> list[Conflict]:
+    """Facts relevant to the question or the answer that disagree.
 
-    Context records count when the fact's topic matches the question. Other
-    visible records (pool) also count when the fact's subject, such as the SKU,
-    is named in the question, so a conflict cannot hide outside the top-k.
+    A fact counts when its topic matches the question, or when the answer
+    states the value of a fact from a cited record (whatever words the question
+    used). Other visible records (pool) count for those answer facts, and for
+    topic matches whose subject, such as the SKU, is named in the question, so
+    a conflict cannot hide outside the top-k.
     """
     words = set(tokenize(question))
     asked = question.upper()
+    stated = set(tokenize(answer, parts=False)) | numbers_in(answer)
+    cited_keys = {key for d in cited or [] for key, value in d.facts if value.lower() in stated}
     by_key: dict[str, dict[str, ConflictValue]] = defaultdict(dict)
     candidates = [(d, False) for d in context] + [(d, True) for d in pool or []]
     for doc, needs_subject in candidates:
         for key, value in doc.facts:
             topic, _, subject = key.partition(":")
-            if not FACT_TOPICS.get(topic, frozenset()) & words:
-                continue
-            if needs_subject and (not subject or subject.upper() not in asked):
+            on_topic = bool(FACT_TOPICS.get(topic, frozenset()) & words)
+            subject_named = bool(subject) and subject.upper() in asked
+            if key not in cited_keys and not (on_topic and (subject_named or not needs_subject)):
                 continue
             by_key[key].setdefault(doc.id, ConflictValue(source_id=doc.id, value=value, updated_at=doc.updated_at))
     return [

@@ -31,6 +31,8 @@ class Embedder(Protocol):
 
 
 def cosine(a: list[float], b: list[float]) -> float:
+    if len(a) != len(b):
+        raise EmbeddingUnavailableError(f"embedding sizes differ ({len(a)} vs {len(b)})")
     dot = sum(x * y for x, y in zip(a, b, strict=True))
     norm = math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b))
     return dot / norm if norm else 0.0
@@ -54,9 +56,14 @@ class OllamaEmbedder:
             raise EmbeddingUnavailableError(f"Ollama not reachable: {exc.__class__.__name__}") from exc
         if resp.status_code != 200:
             raise EmbeddingUnavailableError(f"embedding model returned HTTP {resp.status_code}")
-        vectors = resp.json().get("embeddings", [])
-        if len(vectors) != len(inputs):
+        try:
+            vectors = resp.json()["embeddings"]
+        except (ValueError, KeyError, TypeError) as exc:
+            raise EmbeddingUnavailableError("embedding model returned a body that is not an embedding reply") from exc
+        if not isinstance(vectors, list) or len(vectors) != len(inputs):
             raise EmbeddingUnavailableError("embedding count does not match input count")
+        if not all(isinstance(v, list) and v and all(isinstance(x, (int, float)) for x in v) for v in vectors):
+            raise EmbeddingUnavailableError("embedding vectors are malformed")
         return vectors
 
     def embed_query(self, text: str) -> list[float]:

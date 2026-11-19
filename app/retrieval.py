@@ -81,10 +81,10 @@ def hybrid_search(
     try:
         q_vec = embedder.embed_query(query)
         d_vecs = embedder.embed_documents([f"{d.title}\n{d.text}" for d in docs])
+        dense = {d.id: round(cosine(q_vec, v), 4) for d, v in zip(docs, d_vecs, strict=True)}
     except EmbeddingUnavailableError as exc:
         hits = [h for h in search(docs, query, k) if (h.bm25 or 0) >= min_bm25]
         return hits, f"BM25 only, embeddings unavailable ({exc})"
-    dense = {d.id: round(cosine(q_vec, v), 4) for d, v in zip(docs, d_vecs, strict=True)}
     eligible = [d for d in docs if lexical.get(d.id, 0) >= min_bm25 or dense[d.id] >= min_dense]
     by_lexical = sorted(eligible, key=lambda d: (-lexical.get(d.id, 0), d.id))
     by_dense = sorted(eligible, key=lambda d: (-dense[d.id], d.id))

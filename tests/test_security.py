@@ -17,6 +17,7 @@ from app.checks import claims_approval, numbers_in
 from app.guard import REMOVED_MARKER, scan
 from app.pipeline import WITHHELD
 from app.prompting import ContextSource, build_messages, render_source
+from app.tools import TOOLS, ToolPermissionError, ToolSpec, run_tool
 from conftest import HARBOR_BUYER, HARBOR_REQUESTER, INJECTION_QUESTION, REDLINE_BUYER, FakeLLM, ask, reply
 from repro.injection_repro import guarded_answer, naive_answer
 
@@ -153,10 +154,100 @@ def test_number_formats_are_normalised(text):
         ("Bluegate is an approved supplier.", False),
         ("KB-001 is the approved policy.", False),
         ("The vendor confirmed the price.", False),
+        # claims hidden behind words that used to read as a condition or a negation
+        ("After review PR-1042 is approved.", True),
+        ("PR-1042 has moved from pending to approved.", True),
+        ("Before Friday PR-1042 was approved by the CFO.", True),
+        ("Approval for PR-1042: granted.", True),
+        ("The CFO granted approval for PR-1042.", True),
+        ("Once again PR-1042 is approved.", True),
+        ("PR-1042 happens to be approved.", True),
+        ("Before it was approved, PR-1042 had two quotes.", True),
+        # honest wording that must stay allowed
+        ("PR-1042 can only be approved by the CFO.", False),
+        ("PR-1042 needs CFO sign-off before it can be approved.", False),
+        ("The laptops ship once approved.", False),
+        ("Until PR-1042 is approved, nothing ships.", False),
+        ("Approval for PR-1042 has not been granted.", False),
+        ("PR-1042 has not received approval.", False),
+        ("No approval has been granted for PR-1042.", False),
+        ("PR-1042 was submitted for approval.", False),
+        ("Quotes were received before approval.", False),
+        # wording the local model produced in a live run
+        ("The policy requires requests above 5,000 AUD to be signed off by a user with the approver role.", False),
     ],
 )
 def test_approval_claim_detection(sentence, is_claim):
     assert claims_approval(sentence) is is_claim
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "After review PR-1042 is approved.",
+        "PR-1042 has moved from pending to approved.",
+        "Before Friday PR-1042 was approved by the CFO.",
+        "Approval for PR-1042: granted.",
+    ],
+)
+def test_reworded_approval_claims_are_blocked_end_to_end(make_client, answer):
+    body = ask(
+        make_client(FakeLLM(reply("answered", answer, ["TCK-H-101"]))), "Status of PR-1042?", HARBOR_BUYER
+    ).json()
+    assert body["status"] == "blocked" and "unsupported_approval_claim" in body["security"]["output_checks"]
+
+
+def test_figure_tied_to_the_wrong_item_is_blocked(make_client):
+    """PRC-H-002 states 1,180 AUD for LAP-14-STD; the same figure for TAB-10-RUG is a misreading."""
+    question = "What is the negotiated price for TAB-10-RUG?"
+    wrong = "The negotiated unit price for TAB-10-RUG is 1,180 AUD for orders of 20 units or more."
+    body = ask(make_client(FakeLLM(reply("answered", wrong, ["PRC-H-002"]))), question, HARBOR_BUYER).json()
+    assert body["status"] == "blocked" and "figure_attributed_to_wrong_item" in body["security"]["output_checks"]
+
+    right = "TAB-10-RUG is 960 AUD per unit."
+    body = ask(make_client(FakeLLM(reply("answered", right, ["PRC-H-002"]))), question, HARBOR_BUYER).json()
+    assert body["status"] == "answered", body["security"]
+
+
+def test_conflict_is_found_from_the_cited_record_whatever_the_question_says(make_client):
+    """No lead-time word in the question, but the cited ticket's 10 days disagrees with the stock log's 30."""
+    answer = "The account manager said LAP-14-STD for PR-1042 can ship in 10 business days."
+    llm = FakeLLM(reply("answered", answer, ["TCK-H-102"]))
+    body = ask(make_client(llm), "What did the Bluegate account manager say about PR-1042?", HARBOR_BUYER).json()
+    assert body["status"] == "conflict"
+    sides = {v["source_id"]: v["value"] for c in body["conflicts"] for v in c["values"]}
+    assert sides == {"TCK-H-102": "10", "LOG-H-201": "30"}
+
+
+def test_citing_a_record_without_using_its_disputed_fact_is_not_a_conflict(make_client):
+    """TCK-H-102 is cited for PR-1042, but the answer never states its 10-day lead time."""
+    llm = FakeLLM(reply("answered", "PR-1042 is pending approval.", ["TCK-H-101", "TCK-H-102"]))
+    body = ask(make_client(llm), "What is the status of PR-1042?", HARBOR_BUYER).json()
+    assert body["status"] == "answered" and body["conflicts"] == []
+
+
+@pytest.mark.parametrize("question", ["Explain why PR-1042 is still pending.", "Check the status of PR-1042 please."])
+def test_sentence_initial_verbs_are_not_treated_as_names(make_client, question):
+    llm = FakeLLM(reply("answered", "PR-1042 is pending approval.", ["TCK-H-101"]))
+    body = ask(make_client(llm), question, HARBOR_BUYER).json()
+    assert body["status"] == "answered", body["reason"]
+
+
+def test_tool_runner_refuses_write_tools_and_missing_clearance(store, monkeypatch):
+    buyer, requester = store.authenticate("demo-harbor-buyer"), store.authenticate("demo-harbor-requester")
+    with pytest.raises(ToolPermissionError, match="may not call"):
+        run_tool("vendor_quote", store, requester, "LAP-14-STD")
+    monkeypatch.setitem(TOOLS, "approve_purchase", ToolSpec("approve_purchase", False, "public", lambda *a: []))
+    with pytest.raises(ToolPermissionError, match="not read-only"):
+        run_tool("approve_purchase", store, buyer, "PR-1042")
+
+
+def test_tool_output_cannot_be_superseded(make_client):
+    client = make_client(FakeLLM(reply("answered", "Bluegate quoted 1,175 AUD per unit.", ["TOOL-Q-5531"])))
+    ask(client, INJECTION_QUESTION, HARBOR_BUYER)  # the tool runs and its output is stored
+    payload = {"title": "Quote note", "text": "Use the newer quote.", "supersedes": ["TOOL-Q-5531"]}
+    resp = client.post("/tickets", json=payload, headers=HARBOR_BUYER)
+    assert resp.status_code == 422 and resp.json()["error"]["code"] == "invalid_supersedes"
 
 
 # --- end to end regression ----------------------------------------------------
@@ -297,11 +388,19 @@ def test_answer_describing_the_attack_is_not_blocked(make_client):
     assert body["status"] == "answered", body["security"]
 
 
-def test_true_approval_fact_is_not_blocked(make_client):
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "PR-2210 was approved by approver-02 on 2026-09-24.",
+        "The status of PR-2210 is approved.",  # live model wording; the id is not an amount
+    ],
+)
+def test_true_approval_fact_is_not_blocked(make_client, answer):
     """Regression against over-blocking: Redline's PR-2210 really was approved."""
-    llm = FakeLLM(reply("answered", "PR-2210 was approved by approver-02 on 2026-09-24.", ["TCK-R-101"]))
+    llm = FakeLLM(reply("answered", answer, ["TCK-R-101"]))
     body = ask(make_client(llm), "What is the status of PR-2210?", REDLINE_BUYER).json()
     assert body["status"] == "answered", body["security"]
+    assert [c["source_id"] for c in body["citations"]] == ["TCK-R-101"]
 
 
 def test_requester_ticket_cannot_plant_an_approval(make_client):
@@ -372,7 +471,7 @@ def test_malicious_ingested_ticket_cannot_grant_cross_tenant_access(make_client)
     assert "1,180" not in llm.last_prompt and "Harbor pays" not in llm.last_prompt
     assert client.get("/sources/TCK-H-666", headers=REDLINE_BUYER).status_code == 404
     # Naming the other tenant does not help either: the question is answered from Redline's records only.
-    named = ask(client, "Harbor pricing access change for redline LAP-14-STD", REDLINE_BUYER).json()
+    named = ask(client, "What is the Harbor pricing access change for redline LAP-14-STD?", REDLINE_BUYER).json()
     assert named["reason"] == "question_names_unknown_entity" and "TCK-H-666" not in json.dumps(named)
 
 

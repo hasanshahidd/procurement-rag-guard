@@ -6,7 +6,7 @@ The attack this repo is built around: the vendor quote tool returns text that co
 
 - it reproduces the attack against a deliberately naive pipeline;
 - it contains the attack with permissions enforced in application code;
-- every answer carries citations that can be checked byte for byte;
+- every answer carries citations whose excerpts can be checked byte for byte against the stored record;
 - it abstains or reports a conflict when the evidence is weak or contradictory.
 
 The service runs a local open-weight model through Ollama, uses hybrid retrieval (BM25 plus local embeddings), and includes a web UI and a LoRA fine-tuning demo with executed baseline and adapted results.
@@ -108,7 +108,7 @@ pytest --cov=app --cov=repro --cov-report=term-missing
                AskResponse  +  one JSONL line in logs/audit.jsonl
 ```
 
-Retrieval fuses two rankers with reciprocal rank fusion: BM25 for exact ids and SKUs (`PR-1042`, `LAP-14-STD`), and cosine similarity over `nomic-embed-text` embeddings for paraphrases ("How long until the new clinic computers arrive?" has no keyword in common with the ticket that answers it). A record is a candidate when BM25 scores at least 1.0 or cosine similarity is at least 0.6. That threshold was measured on this corpus: on-topic questions score 0.70 to 0.80 and off-topic questions at most 0.51. If the embedding model is down, retrieval falls back to BM25 and the trace says so. Both rankers only ever see the caller's visible records.
+Retrieval fuses two rankers with reciprocal rank fusion: BM25 for exact ids and SKUs (`PR-1042`, `LAP-14-STD`), and cosine similarity over `nomic-embed-text` embeddings for paraphrases ("How long until the new clinic computers arrive?" has no keyword in common with the ticket that answers it). A record is a candidate when BM25 scores at least 1.0 or cosine similarity is at least 0.6. That threshold was measured on this corpus: on-topic questions score 0.70 to 0.80 and off-topic questions at most 0.51. If the embedding model is down or sends a malformed reply, retrieval falls back to BM25 and the trace says so. Both rankers only ever see the caller's visible records.
 
 The agents are plain functions, not separate processes. Each one writes a line into the `agents` field of the response so the path of a request is visible in the demo and in the audit log.
 
@@ -236,7 +236,7 @@ The citation offsets are Python string indices (Unicode code points) into the st
 | `answered` | Answer backed by at least one citation whose text supports it. |
 | `abstained` | Not enough evidence, the model said so, or the reply broke the JSON contract. `reason` says which. The answer is a fixed sentence and no citations are returned, so an abstention never carries an uncited claim; `retrieved` shows what was read. |
 | `conflict` | Permitted sources disagree on a fact relevant to the question. Both values are returned with citations. |
-| `blocked` | The reply failed an output check (`ungrounded_number_in_answer`, `figure_only_in_unverified_source`, `unsupported_approval_claim`, `instruction_like_text_in_answer`). The answer text is withheld. |
+| `blocked` | The reply failed an output check (`ungrounded_number_in_answer`, `figure_only_in_unverified_source`, `figure_attributed_to_wrong_item`, `unsupported_approval_claim`, `instruction_like_text_in_answer`). The answer text is withheld. |
 
 Abstention reasons: `no_relevant_sources` (nothing above the retrieval thresholds, model not called), `question_names_unknown_entity` (the question names a company or vendor that none of the caller's records mention, model not called), `model_reported_insufficient_evidence`, `model_output_unverifiable` (reply broke the JSON contract), `no_valid_citations`.
 
@@ -274,8 +274,9 @@ Each layer works on its own. The tests switch layers off one at a time by using 
 5. **The verifier does not trust the reply** (`app/pipeline.py`, `app/checks.py`).
    - **Citations:** each must point to a source in this request's context, and the cited sentence must share an id, a number or two words with the answer and must not state different figures than the answer (a price list saying 1,180 cannot back an answer of 990). Sentences the guard removed are never cited. Anything else is listed in `rejected_citations`.
    - **Numbers:** every number of three or more digits in the answer must appear in a cited source (as shown to the model) or in the question (`ungrounded_number_in_answer`). This is an allowlist, so the decision never looks at other tenants' data and cannot be used as an oracle to probe their prices. It also catches invented figures. Numbers are normalised first, so `1 045`, `1.045`, `10-45`, `AUD1045`, full-width and Arabic-Indic digits are all checked. A figure found only in a requester's ticket is not enough: figures must be backed by a seed, tool or curator (buyer, approver) record (`figure_only_in_unverified_source`).
-   - **Approval claims:** a claim that a purchase is approved ("approved", "cleared", "go-ahead", "good to go", "may proceed", "signed off", "I approve", "PR-1042: APPROVED") is blocked unless a system-of-record `pr_status` fact says that PR is approved (`unsupported_approval_claim`). Negations, policy wording ("can be signed off by") and other uses ("an approved supplier") are allowed.
-   - **Conflicts:** structured facts are compared across the context and every other visible record about the same SKU, so a contradicting record cannot hide outside the top-k.
+   - **Approval claims:** a claim that a purchase is approved ("approved", "cleared", "go-ahead", "good to go", "may proceed", "signed off", "I approve", "PR-1042: APPROVED") is blocked unless a system-of-record `pr_status` fact says that PR is approved (`unsupported_approval_claim`). Detection is default deny: approval wording counts as a claim unless it is directly negated ("has not been approved"), a rule ("can be signed off by", "needs to be approved") or a present or future condition ("once approved", "until it is approved"). So "After review PR-1042 is approved" and "moved from pending to approved" are claims, while "an approved supplier" is not.
+   - **Conflicts:** a structured fact is checked when its topic matches the question, or when the answer states the value of a fact from a cited record. It is compared with every other visible record holding the same fact, so a contradicting record cannot hide outside the top-k, and a question that avoids topic words does not avoid the check.
+   - **Figures tied to items:** when an answer sentence gives a figure for a SKU or PR, at least one source sentence with that figure must be about the same item (`figure_attributed_to_wrong_item`). "TAB-10-RUG costs 1,180 AUD" is blocked because 1,180 is the LAP-14-STD price.
    - **Extra fields:** JSON fields such as `actions` are listed in `blocked_actions` and never executed. Only identifier-like words (for example a tool name) are echoed back, so the model cannot smuggle values through these fields.
    - **AI-directed text:** role markers or "ignore previous instructions" in the answer get it blocked.
 6. **Ingest cannot change permissions or reshape the record.**
@@ -351,7 +352,7 @@ pytest -m live -v                        # against the real model (Ollama runnin
 ruff check app repro tests finetune      # lint
 ```
 
-Last local run: 192 passed, 1 expected failure (the documented spelled-out-number gap), 2 live tests passed against `qwen2.5:1.5b`, 93% line coverage over `app/` and `repro/`, ruff clean. The uncovered lines are mostly the transformers model loading path and the reproduction script's CLI, which are exercised by real runs (`finetune/`, `reports/injection_repro.md`) rather than the unit suite.
+Last local run: 233 passed, 1 expected failure (the documented spelled-out-number gap), 2 live tests passed against `qwen2.5:1.5b`, 93% line coverage over `app/` and `repro/`, ruff clean. The uncovered lines are mostly the transformers model loading path and the reproduction script's CLI, which are exercised by real runs (`finetune/`, `reports/injection_repro.md`) rather than the unit suite.
 
 | File | Covers |
 |---|---|
@@ -454,13 +455,11 @@ Exact commands for every run, per-row predictions and confusion matrices are in 
 - **Retrieval is built for a small corpus.** The BM25 index is rebuilt per request and embeddings are cached in process memory. That is fine for hundreds of records. Thousands would need a persistent vector index partitioned per tenant.
 - **The guard is a pattern list.** It catches the scenario payload and common variants, not every possible phrasing or language. The other layers are designed not to rely on it.
 - **The number check reads digits, not words.** A number spelled out in words ("one thousand and forty five") is not checked, which is one reason other tenants' records never enter the prompt in the first place. This gap is recorded as an `xfail` test so it stays visible. The check can also block a correct answer that does arithmetic on the sources (for example a computed total), which is the safe failure.
-- **Citation support is lexical.** A cited sentence must share an id, a number or two words with the answer. That rejects citations that are merely in context, but it is not entailment: a sentence about the same PR can still be cited for a claim it does not state. An NLI model or a second LLM judge would tighten it.
-- **Approval wording is a vocabulary.** The approval-claim check and the status-claim rule for submitted tickets cover the common phrasings ("approved", "cleared", "go-ahead", "good to go", "may proceed", "signed off", "OK'd"). New phrasings would need adding. A small classifier would generalise better; a word list is easy to audit.
-- **The name check is a capitalisation heuristic.** A company typed in lower case is not detected, and an unusual capitalised word that no record contains causes an abstention. It only ever compares against the caller's own records, which is what keeps it from revealing the customer list.
+- **Citation support is lexical.** A cited sentence must share an id, a number or two words with the answer. That rejects citations that are merely in context, and figures must match the item they belong to, but it is not entailment: a sentence about the same PR can still be cited for a claim it does not state. An NLI model or a second LLM judge would tighten it.
+- **Approval wording is a vocabulary.** The approval-claim check is default deny over that vocabulary ("approved", "cleared", "go-ahead", "good to go", "may proceed", "signed off", "OK'd", "approval granted"), with narrow exemptions for negations, rules and conditions. A synonym outside the list would need adding. A small classifier would generalise better; a word list is easy to audit.
+- **The name check is a capitalisation heuristic.** A company typed in lower case is not detected, and the first word of a sentence is skipped because it is capitalised anyway, so a one-word name at the very start of a question is not checked either. In both cases the other tenant's records are still never retrieved. A capitalised word in mid-sentence that no record contains causes an abstention. It only ever compares against the caller's own records, which is what keeps it from revealing the customer list.
 - **Free-text conflicts are left to the model.** Code compares structured `facts`. Two tickets that disagree only in prose, and are not cited with different figures, are not caught in code.
-- **Answer quality depends on a small model.** In live runs `qwen2.5:1.5b` sometimes labels the catalogue list price as "negotiated" when the caller cannot see the real price list. That is wrong but not a leak: the value comes from a record the caller may read, and it is cited. A larger model reduces this.
-- **Conflict detection uses structured `facts` on records.** Conflicts that only exist in free text are left to the model, which may miss them.
-- **Small models make mistakes.** `qwen2.5:1.5b` sometimes abstains when it could answer, or breaks the JSON contract. The service handles that by abstaining, not by guessing, but answer quality is limited by model size.
+- **Answer quality depends on a small model.** In live runs `qwen2.5:1.5b` sometimes labels the catalogue list price as "negotiated" when the caller cannot see the real price list, answers a price question from the vendor quote instead of the price list, abstains when it could answer, or breaks the JSON contract. None of these is a leak or an action: each value comes from a record the caller may read and is cited, and a broken reply becomes an abstention. A larger model reduces this.
 - **Auth is a static key table** for the demo. No key rotation, expiry or SSO.
 - **Rate limiting is per process.** Multiple workers would need a shared store such as Redis.
 

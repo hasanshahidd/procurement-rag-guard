@@ -535,7 +535,10 @@ const REASONS = {
   no_relevant_sources: 'No record this caller can see matches the question. The model was not called.',
   model_output_unverifiable: 'The model reply broke the answer format and was discarded.',
   no_valid_citations: 'The answer cited none of the sources it was given, so it was discarded.',
-  restricted_value_in_answer: 'The answer contained a value this caller may not see.',
+  question_names_unknown_entity: 'The question names a company no record this caller can see mentions. The model was not called.',
+  ungrounded_number_in_answer: 'The answer contained a figure that is in none of the sources it cited.',
+  figure_only_in_unverified_source: 'A figure in the answer is backed only by a requester-submitted ticket.',
+  figure_attributed_to_wrong_item: 'The answer gave a figure for an item that the source states for a different item.',
   unsupported_approval_claim: 'The answer claimed an approval that no record supports.',
   instruction_like_text_in_answer: 'The answer contained instruction-like text.',
 };

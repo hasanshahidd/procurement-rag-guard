@@ -25,7 +25,7 @@ Scope: the `/ask` and `/tickets` paths of this service, for the scenario where a
 
 | # | Threat | Control | Test |
 |---|---|---|---|
-| T1 | Injected text makes the model approve a purchase | No write tools exist; model reply fields are never executed; approval claims blocked unless backed by a record | `test_compromised_model_cannot_leak_cite_or_approve`, `test_each_output_check_blocks_on_its_own` |
+| T1 | Injected text makes the model approve a purchase | No write tools exist; model reply fields are never executed; approval claims blocked unless backed by a record, with default-deny detection | `test_compromised_model_cannot_leak_cite_or_approve`, `test_each_output_check_blocks_on_its_own`, `test_reworded_approval_claims_are_blocked_end_to_end` |
 | T2 | Injected text makes the model reveal another tenant's prices | Other tenants' records never enter the prompt; numbers in the answer must come from the sources shown (allowlist) | `test_prompt_shows_payload_removed_and_no_other_tenant_data`, `test_compromised_model_cannot_leak_cite_or_approve` |
 | T3 | Model cites a source the caller cannot see | Citations must be in the request context; others are rejected | `test_citation_outside_context_is_rejected_and_answer_withheld` |
 | T4 | Caller claims another tenant or role in the body | Strict schemas, identity from the key only | `test_body_cannot_claim_another_tenant`, `test_ask_validation_errors` |
@@ -36,7 +36,7 @@ Scope: the `/ask` and `/tickets` paths of this service, for the scenario where a
 | T9 | Probing ids through `/sources` | Missing and forbidden ids return the same 404 | `test_source_lookup_is_tenant_and_role_scoped` |
 | T10 | Requester reads restricted prices of their own tenant | Role clearance filter, tool requires restricted clearance, number allowlist | `test_requester_gets_no_tool_call_and_no_pricing`, `test_requester_cannot_receive_own_tenant_restricted_prices` |
 | T11 | Outdated evidence presented as current | `supersedes` links exclude old records at query time | `test_superseded_policy_is_excluded`, `test_outdated_price_list_never_reaches_the_model` |
-| T12 | Contradictory evidence hidden behind a confident answer | Fact conflicts detected in code override the model's answer | `test_conflicting_lead_times_override_a_confident_answer` |
+| T12 | Contradictory evidence hidden behind a confident answer | Fact conflicts detected in code override the model's answer, including facts the answer states from a cited record whatever the question's wording | `test_conflicting_lead_times_override_a_confident_answer`, `test_conflict_is_found_from_the_cited_record_whatever_the_question_says` |
 | T13 | Flooding the model | Per-principal rate limit across all paths | `test_rate_limit_returns_429`, `test_rate_limit_counts_every_path_for_a_principal` |
 | T14 | Leak hidden by reformatting a number (`1 045`, `1.045`, full-width digits) | Digits normalised and separators collapsed before the number allowlist check | `test_number_formats_are_normalised`, `test_reformatted_leak_is_still_blocked` |
 | T15 | Model smuggles values through extra JSON fields or fake citation ids | Extra fields summarised to identifier words only; non-id citations shown as `<not a source id>` | `test_model_cannot_smuggle_values_through_extra_fields_or_citations` |
@@ -50,14 +50,17 @@ Scope: the `/ask` and `/tickets` paths of this service, for the scenario where a
 | T23 | Long sources push the system prompt out of the model's context | Per-source cap of 3,000 characters and `num_ctx` 8192 for Ollama | `test_long_sources_are_truncated_to_the_prompt_budget`, `test_ollama_backend_sends_json_mode_and_returns_content` |
 | T24 | A requester posts a "price" that a buyer's answer then repeats | Requesters can only file tickets; figures must be backed by a seed, tool or curator record | `test_requester_can_only_file_tickets`, `test_requester_ticket_cannot_supply_a_figure` |
 | T25 | A source that states a different figure is cited as support | Citations whose figures contradict the answer are rejected | `test_citation_with_a_contradicting_figure_is_rejected` |
-| T26 | A contradicting record is pushed out of the top-k | Structured facts are compared across every visible record about the SKU in the question | `test_conflict_outside_top_k_is_still_found` |
+| T26 | A contradicting record is pushed out of the top-k | Structured facts are compared across every visible record holding the same fact | `test_conflict_outside_top_k_is_still_found` |
 | T27 | A requester tests which restricted ids exist through 409s | Requesters cannot choose ids; chosen ids must match their kind | `test_tenants_cannot_probe_squat_or_shadow_ids` |
 | T28 | A question about another company is answered with the caller's own data, or reveals the customer list | Names no visible record mentions cause the same abstention for real and made-up companies | `test_questions_about_other_companies_abstain_identically` |
 | T29 | Keys guessed at full speed | Failed logins are rate limited per client address | `test_failed_logins_are_rate_limited` |
+| T30 | A figure is reported for the wrong item, with a real citation | A figure tied to a SKU or PR must appear in a source sentence about that item | `test_figure_tied_to_the_wrong_item_is_blocked` |
+| T31 | A malformed reply from Ollama crashes the request | Malformed chat replies become a 503; malformed embedding replies fall back to BM25 | `test_ollama_malformed_reply_is_unavailable_not_a_crash`, `test_hybrid_falls_back_to_bm25_on_mismatched_vector_sizes` |
+| T32 | A write tool is registered and the agent calls it | The tool runner refuses any tool not marked read-only | `test_tool_runner_refuses_write_tools_and_missing_clearance` |
 
 ## Residual risk
 
-- The guard is a pattern list. A novel phrasing reaches the model. Mitigated by T1 to T3 controls, which do not depend on it, and by the LoRA run in `finetune/`, which trains the model to ignore instructions in sources.
+- The guard is a pattern list. A novel phrasing reaches the model. Mitigated by T1 to T3 controls, which do not depend on it. The LoRA runs in `finetune/` measure whether training helps the model ignore instructions in sources; they are not served by default and are not counted as a control.
 - The number check reads digits. A secret spelled out in words would pass it. Mitigated by keeping other tenants' records out of the prompt.
 - Citation support is lexical, not entailment. A sentence about the same purchase request can be cited for a claim it does not state.
 - A wrong but plausible answer built only from permitted sources is still possible with a small model. The citations let a reader check it quickly.

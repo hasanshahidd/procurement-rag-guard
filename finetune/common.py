@@ -25,7 +25,7 @@ DEFAULT_THREADS = max(1, (os.cpu_count() or 2) // 2)
 
 
 def rel(path: Path) -> str:
-    """Repo-relative path for logs, so run records do not carry the local user directory."""
+    """Repo-relative path for run_info.json and summaries. Raw console logs keep what the libraries printed."""
     try:
         return path.resolve().relative_to(ROOT.parent).as_posix()
     except ValueError:

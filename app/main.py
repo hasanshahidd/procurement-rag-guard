@@ -196,7 +196,7 @@ def _build_document(store: Store, who: Principal, body: TicketCreate) -> Documen
         raise AppError(422, "reserved_fact", "Purchase status comes from the purchasing system, not from tickets")
     for sid in body.supersedes:
         target = store.get_visible(who, sid)
-        if target is None or target.tenant_id != who.tenant_id:
+        if target is None or target.tenant_id != who.tenant_id or target.origin == "tool":
             raise AppError(422, "invalid_supersedes", f"'{sid}' is not a record of your tenant")
     doc = Document.build(
         id=body.id or f"{_ID_PREFIX[body.kind]}-{uuid.uuid4().hex[:8].upper()}",
