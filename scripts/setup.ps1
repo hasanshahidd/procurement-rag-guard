@@ -9,6 +9,8 @@ $python = if (Get-Command py -ErrorAction SilentlyContinue) { "py", "-3.11" } el
 Write-Host "Creating virtual environment in $Venv"
 & $python[0] $python[1..9] -m venv $Venv
 $venvPy = Join-Path $Venv "Scripts\python.exe"
+& $venvPy -c "import sys; sys.exit(sys.version_info < (3, 11))"
+if ($LASTEXITCODE -ne 0) { Write-Host "Python 3.11 or newer is required. Install it from python.org, then rerun."; exit 1 }
 & $venvPy -m pip install --quiet --upgrade pip
 & $venvPy -m pip install --quiet -r requirements-dev.txt
 if ($WithML) {
@@ -26,5 +28,5 @@ if (-not (Test-Path $ollama)) {
 
 & $venvPy -m pytest -q
 Write-Host ""
-Write-Host "Ready. Start the API:  $venvPy -m uvicorn app.main:app --port 8000"
+Write-Host "Ready. Start the API:  $venvPy -m uvicorn app.main:create_app --factory --port 8000"
 Write-Host "Then open http://127.0.0.1:8000/ (web UI) or http://127.0.0.1:8000/docs (OpenAPI)."

@@ -1,5 +1,5 @@
 # Request walkthrough used in the screen recording.
-# Start the API first:  uvicorn app.main:app --port 8000
+# Start the API first:  uvicorn app.main:create_app --factory --port 8000
 param([string]$Base = "http://127.0.0.1:8000")
 
 $buyer = @{ "X-API-Key" = "demo-harbor-buyer" }

@@ -71,9 +71,12 @@ class OllamaLLM:
 
 
 class TransformersLLM:
-    def __init__(self, model_id: str, adapter: str | None = None, max_new_tokens: int = 320):
+    def __init__(
+        self, model_id: str, adapter: str | None = None, max_new_tokens: int = 320, revision: str | None = None
+    ):
         self.name = f"transformers:{model_id}" + (f"+lora:{adapter}" if adapter else "")
         self._model_id, self._adapter, self._max_new = model_id, adapter, max_new_tokens
+        self._revision = revision  # pinned Hugging Face commit, so the served weights match the evaluated ones
         self._model = self._tok = None
         self._lock = threading.Lock()
 
@@ -83,9 +86,9 @@ class TransformersLLM:
             from transformers import AutoModelForCausalLM, AutoTokenizer
         except ImportError as exc:
             raise LLMUnavailableError("Install requirements-ml.txt to use the transformers backend") from exc
-        self._tok = AutoTokenizer.from_pretrained(self._model_id)
+        self._tok = AutoTokenizer.from_pretrained(self._model_id, revision=self._revision)
         # fp32 matches the fine-tuning evaluation and is faster than bf16 on most CPUs.
-        model = AutoModelForCausalLM.from_pretrained(self._model_id, dtype=torch.float32)
+        model = AutoModelForCausalLM.from_pretrained(self._model_id, revision=self._revision, dtype=torch.float32)
         if self._adapter:
             from peft import PeftModel
 
@@ -122,7 +125,7 @@ class TransformersLLM:
 
 def build_llm(settings: Settings) -> LLM:
     if settings.llm_backend == "transformers":
-        return TransformersLLM(settings.hf_model, settings.lora_adapter)
+        return TransformersLLM(settings.hf_model, settings.lora_adapter, revision=settings.hf_revision)
     if settings.llm_backend == "ollama":
         return OllamaLLM(settings.ollama_url, settings.ollama_model, settings.llm_timeout_s)
     raise ValueError(f"Unknown LLM_BACKEND '{settings.llm_backend}'")

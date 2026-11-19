@@ -20,6 +20,7 @@ from pathlib import Path
 from app.guard import ScanResult, scan
 
 SHARED_TENANT = "shared"
+CURATOR_ROLES = frozenset({"buyer", "approver"})
 ROLE_CLEARANCE: dict[str, frozenset[str]] = {
     "requester": frozenset({"public", "internal"}),
     "buyer": frozenset({"public", "internal", "restricted"}),
@@ -60,8 +61,14 @@ class Document:
     supersedes: tuple[str, ...] = ()
     facts: tuple[tuple[str, str], ...] = ()
     origin: str = "seed"  # seed | api | tool
+    author_role: str | None = None  # role of the API caller who submitted it; None for seed and tool records
     scan: ScanResult = field(default=None, compare=False)  # type: ignore[assignment]
     content_sha256: str = ""
+
+    @property
+    def trusted(self) -> bool:
+        """Seed, tool and curator (buyer, approver) records can back figures; requester tickets cannot."""
+        return self.origin != "api" or self.author_role in CURATOR_ROLES
 
     @classmethod
     def build(cls, **kw: object) -> Document:
@@ -81,7 +88,8 @@ class DuplicateDocumentError(Exception):
 
 
 _PERSISTED_FIELDS = (
-    "id", "tenant_id", "kind", "title", "text", "updated_at", "sensitivity", "supersedes", "facts", "origin"
+    "id", "tenant_id", "kind", "title", "text", "updated_at", "sensitivity", "supersedes", "facts", "origin",
+    "author_role",
 )  # fmt: skip
 
 

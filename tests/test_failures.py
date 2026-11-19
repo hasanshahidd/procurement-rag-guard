@@ -83,9 +83,16 @@ def test_ollama_backend_sends_json_mode_and_returns_content():
     assert seen["options"]["num_ctx"] == 8192
 
 
-def test_unknown_backend_is_rejected():
+@pytest.mark.parametrize("bad", [{"llm_backend": "openai"}, {"retrieval_mode": "vector"}])
+def test_invalid_settings_fail_at_startup(bad):
     with pytest.raises(ValueError):
-        build_llm(Settings(llm_backend="openai"))
+        Settings(**bad)
+
+
+def test_failed_logins_are_rate_limited(make_client):
+    client = make_client(rate_limit_per_min=2)
+    codes = [ask(client, "status of PR-1042?", {"X-API-Key": f"guess-{i}"}).status_code for i in range(3)]
+    assert codes == [401, 401, 429]
 
 
 def test_transformers_backend_is_lazy_and_names_the_adapter():

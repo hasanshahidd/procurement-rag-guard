@@ -31,7 +31,7 @@ Scope: the `/ask` and `/tickets` paths of this service, for the scenario where a
 | T4 | Caller claims another tenant or role in the body | Strict schemas, identity from the key only | `test_body_cannot_claim_another_tenant`, `test_ask_validation_errors` |
 | T5 | Stored ticket rewrites permissions | Permissions are code and seed config, never document content; ingest is scoped to the caller's tenant | `test_malicious_ingested_ticket_cannot_grant_cross_tenant_access` |
 | T6 | Ticket supersedes another tenant's record to hide it | `supersedes` must point at the caller's own tenant | `test_cannot_supersede_another_tenants_record` |
-| T7 | Source text closes its own prompt block and injects a fake one | Delimiters inside source text are rewritten | `test_source_text_cannot_close_its_own_block` |
+| T7 | Source text closes its own prompt block and injects a fake one | Delimiters inside source text and the question are rewritten | `test_source_and_question_cannot_open_or_close_blocks` |
 | T8 | Payload hidden with zero-width or full-width characters | NFKC normalisation and zero-width removal before scanning | `test_guard_flags_injection_variants` |
 | T9 | Probing ids through `/sources` | Missing and forbidden ids return the same 404 | `test_source_lookup_is_tenant_and_role_scoped` |
 | T10 | Requester reads restricted prices of their own tenant | Role clearance filter, tool requires restricted clearance, number allowlist | `test_requester_gets_no_tool_call_and_no_pricing`, `test_requester_cannot_receive_own_tenant_restricted_prices` |
@@ -48,6 +48,12 @@ Scope: the `/ask` and `/tickets` paths of this service, for the scenario where a
 | T21 | Model cites a source that is in context but does not back the claim | Cited sentence must share an id, number or two words with the answer; removed sentences are never cited | `test_citation_must_support_the_answer` |
 | T22 | A record carrying injected text reshapes others (supersede, facts) | Flagged ingests cannot set facts or supersede | `test_flagged_ingest_cannot_supersede_or_set_facts` |
 | T23 | Long sources push the system prompt out of the model's context | Per-source cap of 3,000 characters and `num_ctx` 8192 for Ollama | `test_long_sources_are_truncated_to_the_prompt_budget`, `test_ollama_backend_sends_json_mode_and_returns_content` |
+| T24 | A requester posts a "price" that a buyer's answer then repeats | Requesters can only file tickets; figures must be backed by a seed, tool or curator record | `test_requester_can_only_file_tickets`, `test_requester_ticket_cannot_supply_a_figure` |
+| T25 | A source that states a different figure is cited as support | Citations whose figures contradict the answer are rejected | `test_citation_with_a_contradicting_figure_is_rejected` |
+| T26 | A contradicting record is pushed out of the top-k | Structured facts are compared across every visible record about the SKU in the question | `test_conflict_outside_top_k_is_still_found` |
+| T27 | A requester tests which restricted ids exist through 409s | Requesters cannot choose ids; chosen ids must match their kind | `test_tenants_cannot_probe_squat_or_shadow_ids` |
+| T28 | A question about another company is answered with the caller's own data, or reveals the customer list | Names no visible record mentions cause the same abstention for real and made-up companies | `test_questions_about_other_companies_abstain_identically` |
+| T29 | Keys guessed at full speed | Failed logins are rate limited per client address | `test_failed_logins_are_rate_limited` |
 
 ## Residual risk
 

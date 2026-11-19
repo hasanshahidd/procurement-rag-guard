@@ -5,8 +5,14 @@
 set -e
 cd "$(dirname "$0")/.."
 VENV="${VENV:-.venv}"
+PYTHON="${PYTHON:-python3}"
 
-python3 -m venv "$VENV"
+if ! "$PYTHON" -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
+  echo "Python 3.11 or newer is required (found: $("$PYTHON" --version 2>&1))."
+  echo "Install python3.11 and rerun with: PYTHON=python3.11 sh scripts/setup.sh"
+  exit 1
+fi
+"$PYTHON" -m venv "$VENV"
 "$VENV/bin/python" -m pip install --quiet --upgrade pip
 "$VENV/bin/python" -m pip install --quiet -r requirements-dev.txt
 if [ "${WITH_ML:-0}" = "1" ]; then
@@ -22,5 +28,5 @@ ollama pull nomic-embed-text
 
 "$VENV/bin/python" -m pytest -q
 echo
-echo "Ready. Start the API:  $VENV/bin/python -m uvicorn app.main:app --port 8000"
+echo "Ready. Start the API:  $VENV/bin/python -m uvicorn app.main:create_app --factory --port 8000"
 echo "Then open http://127.0.0.1:8000/ (web UI) or http://127.0.0.1:8000/docs (OpenAPI)."

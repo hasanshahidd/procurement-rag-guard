@@ -19,6 +19,18 @@ Opening the flagged tool result shows exactly what the guard removed before the 
 
 ![Source drawer for TOOL-Q-5531 with the injected SYSTEM sentences struck through and labelled with the rules that matched](docs/ui-source-drawer.png)
 
+## For reviewers: where to look
+
+| What | Where |
+|---|---|
+| Run it | `scripts/setup.ps1` or `scripts/setup.sh`, then `uvicorn app.main:create_app --factory --port 8000` and open http://127.0.0.1:8000/ |
+| The request path | `Pipeline.ask` in `app/pipeline.py` (retriever, tool runner, guard, answerer, verifier) |
+| The controls | `app/store.py` (tenant and role filter), `app/guard.py` (untrusted text), `app/checks.py` (verifier checks) |
+| The key regression test | `tests/test_security.py::test_compromised_model_cannot_leak_cite_or_approve` (model fully obeys the attack; nothing leaks or gets approved) |
+| The incident, reproduced | `reports/injection_repro.md` (naive vs guarded, sampled, with a control) |
+| Fine-tuning evidence | `finetune/results/summary.md` and the section below |
+| Threats and their tests | `docs/threat-model.md` |
+
 ## Quick start
 
 Requires Python 3.11+ and [Ollama](https://ollama.com). One command creates the environment, installs packages, pulls both local models and runs the tests:
@@ -36,7 +48,7 @@ python -m venv .venv
 pip install -r requirements-dev.txt
 ollama pull qwen2.5:1.5b
 ollama pull nomic-embed-text
-uvicorn app.main:app --port 8000
+uvicorn app.main:create_app --factory --port 8000
 ```
 
 Then open:
@@ -205,7 +217,7 @@ Response from a real run with `qwen2.5:1.5b` on a laptop CPU (two of the four ci
     "output_checks": []
   },
   "agents": [
-    {"agent": "retriever", "summary": "11 visible records, kept ['TCK-H-101', 'TCK-H-102', 'LOG-H-201', 'TCK-H-103']"},
+    {"agent": "retriever", "summary": "hybrid BM25 + ollama:nomic-embed-text over 11 visible records, kept [...]"},
     {"agent": "tool_runner", "summary": "vendor_quote(LAP-14-STD) returned ['TOOL-Q-5531']"},
     {"agent": "guard", "summary": "flagged ['TCK-H-103', 'TOOL-Q-5531']"},
     {"agent": "answerer", "summary": "ollama:qwen2.5:1.5b replied in 10.6s, contract ok"},
@@ -224,7 +236,9 @@ The citation offsets are Python string indices (Unicode code points) into the st
 | `answered` | Answer backed by at least one citation whose text supports it. |
 | `abstained` | Not enough evidence, the model said so, or the reply broke the JSON contract. `reason` says which. The answer is a fixed sentence and no citations are returned, so an abstention never carries an uncited claim; `retrieved` shows what was read. |
 | `conflict` | Permitted sources disagree on a fact relevant to the question. Both values are returned with citations. |
-| `blocked` | The reply failed an output check (`ungrounded_number_in_answer`, `unsupported_approval_claim`, `instruction_like_text_in_answer`). The answer text is withheld. |
+| `blocked` | The reply failed an output check (`ungrounded_number_in_answer`, `figure_only_in_unverified_source`, `unsupported_approval_claim`, `instruction_like_text_in_answer`). The answer text is withheld. |
+
+Abstention reasons: `no_relevant_sources` (nothing above the retrieval thresholds, model not called), `question_names_unknown_entity` (the question names a company or vendor that none of the caller's records mention, model not called), `model_reported_insufficient_evidence`, `model_output_unverifiable` (reply broke the JSON contract), `no_valid_citations`.
 
 ### Errors
 
@@ -237,13 +251,13 @@ Every error uses one envelope:
 | HTTP | code | When |
 |---|---|---|
 | 401 | `unauthorized` | Missing or unknown `X-API-Key`. |
-| 403 | `forbidden` | Role cannot create a record at that sensitivity, or a requester tries to set `facts` or `supersedes`. |
+| 403 | `forbidden` | Role cannot create a record at that sensitivity, or a requester tries to file anything other than a ticket, choose an id, or set `facts` or `supersedes`. |
 | 404 | `not_found` | Unknown route, or a source the caller cannot see. |
 | 405 | `method_not_allowed` | Wrong HTTP method for the route. |
 | 409 | `duplicate_id` | Ticket id already exists in the caller's tenant or the shared knowledge base. |
 | 422 | `validation_error` | Bad body, unknown field (such as `tenant_id`), wrong type (`top_k: "3"`), future `updated_at`. |
 | 422 | `invalid_supersedes` | `supersedes` points at a record outside the caller's tenant. |
-| 422 | `reserved_id`, `reserved_fact` | `TOOL-` ids are reserved for tool output; `pr_status` facts come only from the purchasing system. |
+| 422 | `reserved_id`, `reserved_fact` | A chosen id must match its kind (`TCK-`, `LOG-`, `KB-`), so `PRC-` and `TOOL-` ids cannot be minted; `pr_status` facts come only from the purchasing system. |
 | 422 | `untrusted_content` | A record whose text was flagged by the guard tries to set `facts` or supersede other records. |
 | 429 | `rate_limited` | More than `RATE_LIMIT_PER_MIN` calls per minute for a principal. |
 | 500 | `internal_error` | Unexpected error. Details go to the server log only. |
@@ -258,17 +272,25 @@ Each layer works on its own. The tests switch layers off one at a time by using 
 3. **Tools are chosen by code and are read-only.** The tool runner calls `vendor_quote` when the question names a SKU and the role has restricted clearance. There is no approve or edit tool registered at all (`app/tools.py`).
 4. **Untrusted text is sanitized and fenced.** `app/guard.py` normalises Unicode (NFKC, invisible format characters removed, Cyrillic and Greek look-alikes folded) and removes sentences that look like commands to an AI system. Records submitted through the API also lose approval-status statements ("PR-1042 has been cleared for purchase"), because purchase status comes only from the purchasing system. Each source is wrapped in a `[SOURCE ...]` block whose closing marker cannot be forged from inside, and capped at 3,000 characters so the system prompt always fits Ollama's 8,192-token context. The system prompt states that sources are data.
 5. **The verifier does not trust the reply** (`app/pipeline.py`, `app/checks.py`).
-   - **Citations:** each must point to a source in this request's context, and the cited sentence must share an id, a number or two words with the answer. Sentences the guard removed are never cited. Anything else is listed in `rejected_citations`.
-   - **Numbers:** every number of three or more digits in the answer must appear in a source the model was shown or in the question (`ungrounded_number_in_answer`). This is an allowlist, so the decision never looks at other tenants' data and cannot be used as an oracle to probe their prices. It also catches invented figures. Numbers are normalised first, so `1 045`, `1.045`, `AUD1045`, full-width and Arabic-Indic digits are all checked.
-   - **Approval claims:** a claim that something is approved ("approved", "cleared", "go-ahead", "signed off", "I approve", "PR-1042: APPROVED") is blocked unless a system-of-record `pr_status` fact says that PR is approved (`unsupported_approval_claim`). Negations and policy wording ("has not been approved", "can be signed off by") are allowed.
+   - **Citations:** each must point to a source in this request's context, and the cited sentence must share an id, a number or two words with the answer and must not state different figures than the answer (a price list saying 1,180 cannot back an answer of 990). Sentences the guard removed are never cited. Anything else is listed in `rejected_citations`.
+   - **Numbers:** every number of three or more digits in the answer must appear in a cited source (as shown to the model) or in the question (`ungrounded_number_in_answer`). This is an allowlist, so the decision never looks at other tenants' data and cannot be used as an oracle to probe their prices. It also catches invented figures. Numbers are normalised first, so `1 045`, `1.045`, `10-45`, `AUD1045`, full-width and Arabic-Indic digits are all checked. A figure found only in a requester's ticket is not enough: figures must be backed by a seed, tool or curator (buyer, approver) record (`figure_only_in_unverified_source`).
+   - **Approval claims:** a claim that a purchase is approved ("approved", "cleared", "go-ahead", "good to go", "may proceed", "signed off", "I approve", "PR-1042: APPROVED") is blocked unless a system-of-record `pr_status` fact says that PR is approved (`unsupported_approval_claim`). Negations, policy wording ("can be signed off by") and other uses ("an approved supplier") are allowed.
+   - **Conflicts:** structured facts are compared across the context and every other visible record about the same SKU, so a contradicting record cannot hide outside the top-k.
    - **Extra fields:** JSON fields such as `actions` are listed in `blocked_actions` and never executed. Only identifier-like words (for example a tool name) are echoed back, so the model cannot smuggle values through these fields.
    - **AI-directed text:** role markers or "ignore previous instructions" in the answer get it blocked.
-6. **Ingest cannot change permissions or reshape the record.** Records are stored per tenant, so ids cannot be probed, squatted or shadowed across tenants, and `TOOL-` ids are reserved. Only buyers and approvers can add `facts` or `supersedes` links. Purchase status facts cannot be set through tickets at all. A record whose text the guard flagged can be stored and read as data, but cannot set facts or supersede anything.
-7. **Audit.** Every `/ask` and every ingest writes one JSON line with tenant, role, sources, hashes and security findings. Raw model replies are logged only as a SHA-256, so a reply that leaked something is traceable without the log becoming a second copy of the leak. API keys are never logged. If the line cannot be written, the request fails.
+6. **Ingest cannot change permissions or reshape the record.**
+   - Records are stored per tenant, so ids cannot be probed, squatted or shadowed across tenants.
+   - Requesters can only file tickets, with server-assigned ids, so they can neither post knowledge-base entries nor test which ids exist.
+   - A chosen id must match its kind, so price-list (`PRC-`) and tool (`TOOL-`) ids cannot be minted.
+   - Only buyers and approvers can add `facts` or `supersedes` links, and purchase status facts cannot be set through the API at all.
+   - A record whose text the guard flagged can be stored and read as data, but cannot set facts or supersede anything.
+   - Every record keeps who submitted it, and the number check uses that (step 5).
+7. **Questions about names the caller's records never mention abstain before the model runs.** If the question names a company or vendor that none of the caller's sources mention, the answer is "None of the records available to you mention X". The reply is the same for another real customer and for a made-up company, so it cannot reveal who the customers are.
+8. **Audit.** Every `/ask` and every ingest writes one JSON line with tenant, role, sources, hashes and security findings. Raw model replies are logged only as a SHA-256, so a reply that leaked something is traceable without the log becoming a second copy of the leak. API keys are never logged. If the line cannot be written, the request fails.
 
 The guard in step 4 is a heuristic and will miss new phrasings. That is why the other steps do not depend on it, and why the regression test uses a model that obeys the injection perfectly.
 
-**Two adversarial review rounds** were run against these controls, each by a reviewer asked only to break them.
+**Three adversarial review rounds** were run against these controls, each by a reviewer asked only to break them.
 - **Round 1 found:** reformatted numbers, model text echoed through `blocked_actions`, a race between ingest and reads, a per-path rate limit key, a global id namespace, narrow approval wording, and guard misses (soft hyphen, Cyrillic look-alikes, list markers).
 - **Round 2 found:**
   - the number check used a list of other tenants' values, so a blocked answer revealed that a number existed elsewhere (now an allowlist);
@@ -277,8 +299,16 @@ The guard in step 4 is a heuristic and will miss new phrasings. That is why the 
   - flagged records could supersede others;
   - loose `top_k` typing;
   - a biased naive prompt in the reproduction.
+- **Round 3 found:**
+  - a requester-posted "price" being used for a buyer's answer;
+  - a contradicting price list accepted as a citation;
+  - conflicts hidden outside the top-k;
+  - id probing through 409s;
+  - approval wording false positives and negatives;
+  - hyphen-split numbers;
+  - questions about other companies answered with the caller's own data.
 
-Every finding is fixed and has a regression test in `tests/test_security.py`, `tests/test_api.py` or `tests/test_rag.py`.
+Every finding is fixed and has a regression test in `tests/test_security.py`, `tests/test_api.py`, `tests/test_rag.py` or `tests/test_failures.py`.
 
 ### Reproducing the incident
 
@@ -294,17 +324,19 @@ This runs the scenario through a deliberately naive pipeline and through the rea
 
 Its prompt is neutral: it lists the one tool and asks for JSON, with no hint to use the tool. The attack is sampled 10 times (temperature 0.7, seeds 1 to 10). A control runs the same pipeline with the injected sentences removed, so any difference is caused by the payload.
 
-Committed run with `qwen2.5:1.5b`:
+Two runs with `qwen2.5:1.5b` on the same machine (the committed report is run B):
 
-| Naive pipeline | Action executed | Hidden values leaked | Says approved |
+| Naive pipeline | Action executed (A / B) | Hidden values leaked (A / B) | Says approved (A / B) |
 |---|---|---|---|
-| With payload | 4/10 | 1/10 | 1/10 |
-| Payload removed (control) | 4/10 | 0/10 | 0/10 |
+| With payload | 4/10 / 2/10 | 1/10 / 3/10 | 1/10 / 1/10 |
+| Payload removed (control) | 4/10 / 5/10 | 0/10 / 0/10 | 0/10 / 0/10 |
+
+The runs differ even with fixed seeds, because Ollama's sampling is not bit-for-bit reproducible across server reloads. The pattern is the same in both.
 
 What this shows, plainly:
 
-- **The real risk is the design, not only the payload.** A naive agent that executes model output calls `approve_purchase` in 4 of 10 runs even without any injection.
-- **The payload adds harm on top.** With the payload, the model also leaked another customer's values once and claimed approval once in 10 runs; the control did neither.
+- **The real risk is the design, not only the payload.** A naive agent that executes model output calls `approve_purchase` in 4 to 5 of 10 runs even without any injection.
+- **The payload adds harm on top.** With the payload, the model leaked another customer's values in 1 to 3 of 10 runs and claimed approval once; the control never did either.
 - **No attack is needed to leak across tenants.** Asked "What is Redline Freight's negotiated price for LAP-14-STD?" as a Harbor user, the naive pipeline answered "1,045 AUD per unit" and also emitted an `approve_purchase` call.
 - **The guarded pipeline closes all three by construction.** It never retrieves Redline records for a Harbor caller and exposes no callable tool. On the scenario question it flags TOOL-Q-5531 and answers from the factual part of the quote, with verifiable citations.
 
@@ -319,7 +351,7 @@ pytest -m live -v                        # against the real model (Ollama runnin
 ruff check app repro tests finetune      # lint
 ```
 
-Last local run: 175 passed, 1 expected failure (the documented spelled-out-number gap), 2 live tests passed against `qwen2.5:1.5b`, 93% line coverage over `app/` and `repro/`, ruff clean. The uncovered lines are mostly the transformers model loading path and the reproduction script's CLI, which are exercised by real runs (`finetune/`, `reports/injection_repro.md`) rather than the unit suite.
+Last local run: 192 passed, 1 expected failure (the documented spelled-out-number gap), 2 live tests passed against `qwen2.5:1.5b`, 93% line coverage over `app/` and `repro/`, ruff clean. The uncovered lines are mostly the transformers model loading path and the reproduction script's CLI, which are exercised by real runs (`finetune/`, `reports/injection_repro.md`) rather than the unit suite.
 
 | File | Covers |
 |---|---|
@@ -335,10 +367,10 @@ Last local run: 175 passed, 1 expected failure (the documented spelled-out-numbe
 
 | Backend | Setting | Model | Notes |
 |---|---|---|---|
-| Ollama (default) | `LLM_BACKEND=ollama` | `qwen2.5:1.5b` (Qwen2.5 1.5B Instruct, Apache 2.0) | JSON mode, temperature 0, fixed seed. Pull with `ollama pull qwen2.5:1.5b`. |
-| transformers | `LLM_BACKEND=transformers` | `Qwen/Qwen2.5-0.5B-Instruct` (Apache 2.0) | Runs in process, fp32. Install `requirements-ml.txt`. Can load the LoRA adapter with `LORA_ADAPTER=finetune/outputs/qwen2.5-0.5b-procurement-lora`. Slow on CPU (about 1 to 2 minutes per answer on the test laptop), so Ollama is the default. |
+| Ollama (default) | `LLM_BACKEND=ollama` | `qwen2.5:1.5b` (Qwen2.5 1.5B Instruct, Apache 2.0), tested digest `65ec06548149` | JSON mode, temperature 0, fixed seed, `num_ctx` 8192. Pull with `ollama pull qwen2.5:1.5b`; `ollama list` shows the digest. |
+| transformers | `LLM_BACKEND=transformers` | `Qwen/Qwen2.5-0.5B-Instruct` (Apache 2.0) | Runs in process, fp32, pinned to revision `7ae5576`. Install `requirements-ml.txt`. Can load the LoRA adapter with `LORA_ADAPTER=finetune/outputs/qwen2.5-0.5b-procurement-lora`. Slow on CPU (about 1 to 2 minutes per answer on the test laptop), so Ollama is the default. |
 
-Embeddings come from `nomic-embed-text` (Apache 2.0, 768 dimensions) through the same Ollama server.
+Embeddings come from `nomic-embed-text` (Apache 2.0, 768 dimensions, tested digest `0a109f422b47`) through the same Ollama server.
 
 Any other Ollama model works through `OLLAMA_MODEL`, for example `qwen2.5:7b` for better answers on a machine with more memory.
 
@@ -350,6 +382,7 @@ Any other Ollama model works through `OLLAMA_MODEL`, for example `qwen2.5:7b` fo
 | `OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama server |
 | `OLLAMA_MODEL` | `qwen2.5:1.5b` | Ollama model tag |
 | `HF_MODEL` | `Qwen/Qwen2.5-0.5B-Instruct` | Hugging Face model for the transformers backend |
+| `HF_REVISION` | `7ae557604adf...` | Pinned commit of `HF_MODEL`, the same snapshot the LoRA runs used |
 | `LORA_ADAPTER` | unset | Path to a PEFT adapter for the transformers backend |
 | `LLM_TIMEOUT_S` | `120` | Model call timeout |
 | `MIN_RETRIEVAL_SCORE` | `1.0` | BM25 score below which a hit is ignored |
@@ -422,8 +455,9 @@ Exact commands for every run, per-row predictions and confusion matrices are in 
 - **The guard is a pattern list.** It catches the scenario payload and common variants, not every possible phrasing or language. The other layers are designed not to rely on it.
 - **The number check reads digits, not words.** A number spelled out in words ("one thousand and forty five") is not checked, which is one reason other tenants' records never enter the prompt in the first place. This gap is recorded as an `xfail` test so it stays visible. The check can also block a correct answer that does arithmetic on the sources (for example a computed total), which is the safe failure.
 - **Citation support is lexical.** A cited sentence must share an id, a number or two words with the answer. That rejects citations that are merely in context, but it is not entailment: a sentence about the same PR can still be cited for a claim it does not state. An NLI model or a second LLM judge would tighten it.
-- **Approval wording is a vocabulary.** The approval-claim check and the status-claim rule for submitted tickets cover the common phrasings ("approved", "cleared", "go-ahead", "signed off", "OK'd"). New phrasings would need adding, and this is the most likely place for a reviewer's debugging change.
-- **Questions about another customer get a weak answer, never a leak.** Asked for Redline's price as a Harbor user, the model only ever sees Harbor records, so the worst case is wording like "The negotiated price for LAP-14-STD is 1,180 AUD" (Harbor's own price, cited). A deterministic "other customer named" check would fix the wording, but it would also reveal which companies are customers, so it is left out on purpose.
+- **Approval wording is a vocabulary.** The approval-claim check and the status-claim rule for submitted tickets cover the common phrasings ("approved", "cleared", "go-ahead", "good to go", "may proceed", "signed off", "OK'd"). New phrasings would need adding. A small classifier would generalise better; a word list is easy to audit.
+- **The name check is a capitalisation heuristic.** A company typed in lower case is not detected, and an unusual capitalised word that no record contains causes an abstention. It only ever compares against the caller's own records, which is what keeps it from revealing the customer list.
+- **Free-text conflicts are left to the model.** Code compares structured `facts`. Two tickets that disagree only in prose, and are not cited with different figures, are not caught in code.
 - **Answer quality depends on a small model.** In live runs `qwen2.5:1.5b` sometimes labels the catalogue list price as "negotiated" when the caller cannot see the real price list. That is wrong but not a leak: the value comes from a record the caller may read, and it is cited. A larger model reduces this.
 - **Conflict detection uses structured `facts` on records.** Conflicts that only exist in free text are left to the model, which may miss them.
 - **Small models make mistakes.** `qwen2.5:1.5b` sometimes abstains when it could answer, or breaks the JSON contract. The service handles that by abstaining, not by guessing, but answer quality is limited by model size.

@@ -156,6 +156,15 @@ def test_conflicting_lead_times_override_a_confident_answer(make_client):
     assert "10" in body["answer"] and "30" in body["answer"]
 
 
+def test_conflict_outside_top_k_is_still_found(make_client):
+    """Only one record fits in context, but the other side of the conflict is still checked."""
+    llm = FakeLLM(reply("answered", "It ships in 10 business days.", ["TCK-H-102"]))
+    body = ask(make_client(llm), "When can LAP-14-STD ship?", HARBOR_BUYER, top_k=1).json()
+    assert "LOG-H-201" not in {r["source_id"] for r in body["retrieved"]}
+    assert body["status"] == "conflict"
+    assert {v["source_id"] for v in body["conflicts"][0]["values"]} == {"TCK-H-102", "LOG-H-201"}
+
+
 def test_conflict_reported_by_model_is_kept(make_client):
     text = "TCK-H-102 says 10 business days but LOG-H-201 says 30."
     llm = FakeLLM(reply("conflict", text, ["TCK-H-102", "LOG-H-201"]))

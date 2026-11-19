@@ -20,12 +20,20 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 
 from app.audit import AuditLog
-from app.checks import MIN_SUPPORT, describe_extra_field, numbers_in, run_output_checks, support_score
+from app.checks import (
+    MIN_SUPPORT,
+    contradicting_figures,
+    describe_extra_field,
+    numbers_in,
+    run_output_checks,
+    support_score,
+    unmentioned_names,
+)
 from app.config import Settings
 from app.embeddings import Embedder
 from app.guard import sentence_spans
 from app.llm import LLM
-from app.prompting import ContextSource, ModelOutput, build_messages, parse_model_output
+from app.prompting import MAX_SOURCE_CHARS, ContextSource, ModelOutput, build_messages, parse_model_output
 from app.retrieval import Hit, hybrid_search, search, tokenize
 from app.schemas import (
     AgentStep,
@@ -68,6 +76,7 @@ class _Run:
     excluded: list[SourceNote] = field(default_factory=list)
     retrieved: list[RetrievedSource] = field(default_factory=list)
     raw_sha256: str | None = None  # hash of the raw model reply, so a blocked reply is traceable without storing it
+    fact_pool: list[Document] = field(default_factory=list)  # visible, current records with structured facts
 
     def step(self, agent: str, summary: str) -> None:
         self.steps.append(AgentStep(agent=agent, summary=summary))
@@ -89,6 +98,7 @@ class Pipeline:
     def _retrieve(self, run: _Run, principal: Principal, question: str, top_k: int) -> list[Document]:
         visible = self.store.visible_docs(principal)
         superseded_by = {old: d.id for d in visible for old in d.supersedes}
+        run.fact_pool = [d for d in visible if d.facts and d.id not in superseded_by]
         hits, mode = self._rank(visible, question, top_k + len(superseded_by))
         context: list[Document] = []
         for hit in hits:
@@ -144,6 +154,12 @@ class Pipeline:
         if not context:
             run.step("verifier", "no evidence above threshold, abstaining without calling the model")
             return self._finish(run, principal, question, "abstained", "no_relevant_sources", NO_EVIDENCE, [])
+        missing = unmentioned_names(question, " ".join(f"{d.title} {d.scan.clean_text}" for d in context))
+        if missing:
+            # Same reply for another customer's name and a made-up one, so this reveals nothing.
+            run.step("verifier", f"question names {missing}; no record available to this caller mentions them")
+            answer = f"None of the records available to you mention {', '.join(missing)}."
+            return self._finish(run, principal, question, "abstained", "question_names_unknown_entity", answer, [])
         sources = self._guard(run, context)
         parsed = self._answer(run, question, sources)
         return self._verify(run, principal, question, context, parsed)
@@ -162,9 +178,10 @@ class Pipeline:
                 BlockedAction(origin="model_output", detail=describe_extra_field(key, value))
             )
         cited = self._check_citations(run, out, by_id)
-        failures = self._output_checks(question, out.answer, context)
+        failures = self._output_checks(question, out.answer, cited or context)
         run.security.output_checks.extend(failures)
-        conflicts = find_conflicts(question, context)
+        conflicts = find_conflicts(question, context, run.fact_pool)
+        by_id.update({d.id: d for d in run.fact_pool})
         run.step(
             "verifier", f"citations ok={[d.id for d in cited]}, checks failed={failures}, conflicts={len(conflicts)}"
         )
@@ -208,26 +225,36 @@ class Pipeline:
             if doc is None:
                 shown = cid if _DOC_ID.match(cid) else "<not a source id>"  # never echo free text from the model
                 reason = "not among the sources provided for this request"
-            elif make_citation(doc, out.answer) is None:
+            elif (citation := make_citation(doc, out.answer)) is None:
                 shown, reason = cid, "cited source does not support the answer"
+            elif contradicting_figures(citation.excerpt, out.answer):
+                shown, reason = cid, "cited text states different figures than the answer"
             else:
                 kept.append(doc)
                 continue
             run.security.rejected_citations.append(SourceNote(source_id=shown, reason=reason))
         return kept
 
-    def _output_checks(self, question: str, answer: str, context: list[Document]) -> list[str]:
-        # Allowlist: only numbers the model was actually shown (source header and the text the guard kept)
-        # or the user typed. Text the guard removed does not count.
-        shown = " ".join(f"{d.id} {d.updated_at} {d.scan.clean_text}" for d in context)
-        allowed = numbers_in(question) | numbers_in(shown)
+    def _output_checks(self, question: str, answer: str, backing: list[Document]) -> list[str]:
+        """backing: the cited sources (or, with no valid citation, everything the model was shown).
+
+        Allowlist: numbers must appear in what the model was shown of those sources (header and the part
+        of the text the guard kept, within the prompt budget) or in the question. Text the guard removed
+        never counts. Figures found only in requester-submitted records are reported separately.
+        """
+
+        def numbers_of(docs: list[Document]) -> set[str]:
+            return numbers_in(" ".join(f"{d.id} {d.updated_at} {d.scan.clean_text[:MAX_SOURCE_CHARS]}" for d in docs))
+
+        typed = numbers_in(question)
         approved = {
             key.split(":", 1)[1].upper()
-            for d in context
+            for d in backing
             for key, value in d.facts
             if key.startswith("pr_status:") and value == "approved"
         }
-        return run_output_checks(answer, allowed, approved)
+        trusted = typed | numbers_of([d for d in backing if d.trusted])
+        return run_output_checks(answer, typed | numbers_of(backing), approved, trusted)
 
     def _finish(
         self,
@@ -276,14 +303,30 @@ def _replacements(
     return found
 
 
-def find_conflicts(question: str, context: list[Document]) -> list[Conflict]:
+def find_conflicts(question: str, context: list[Document], pool: list[Document] | None = None) -> list[Conflict]:
+    """Facts relevant to the question that disagree.
+
+    Context records count when the fact's topic matches the question. Other
+    visible records (pool) also count when the fact's subject, such as the SKU,
+    is named in the question, so a conflict cannot hide outside the top-k.
+    """
     words = set(tokenize(question))
-    by_key: dict[str, list[ConflictValue]] = defaultdict(list)
-    for doc in context:
+    asked = question.upper()
+    by_key: dict[str, dict[str, ConflictValue]] = defaultdict(dict)
+    candidates = [(d, False) for d in context] + [(d, True) for d in pool or []]
+    for doc, needs_subject in candidates:
         for key, value in doc.facts:
-            if FACT_TOPICS.get(key.split(":", 1)[0], frozenset()) & words:
-                by_key[key].append(ConflictValue(source_id=doc.id, value=value, updated_at=doc.updated_at))
-    return [Conflict(fact=k, values=v) for k, v in sorted(by_key.items()) if len({x.value for x in v}) > 1]
+            topic, _, subject = key.partition(":")
+            if not FACT_TOPICS.get(topic, frozenset()) & words:
+                continue
+            if needs_subject and (not subject or subject.upper() not in asked):
+                continue
+            by_key[key].setdefault(doc.id, ConflictValue(source_id=doc.id, value=value, updated_at=doc.updated_at))
+    return [
+        Conflict(fact=k, values=list(v.values()))
+        for k, v in sorted(by_key.items())
+        if len({x.value for x in v.values()}) > 1
+    ]
 
 
 def describe_conflicts(conflicts: list[Conflict]) -> str:

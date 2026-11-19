@@ -17,14 +17,19 @@ from app.retrieval import tokenize
 ANSWER_RULES = frozenset({"role_marker", "chat_template_token", "persona_switch", "ignore_instructions"})
 MIN_SUPPORT = 2  # a cited sentence must share one id or number, or two words, with the answer
 
-_NUM_GROUP = re.compile(r"\d+(?:[\s.,_'  ]+\d+)*")
+_NUM_GROUP = re.compile(r"\d+(?:[\s.,_'/\-  ]+\d+)*")
 _PR_ID = re.compile(r"\bPR-\d+\b", re.I)
 _APPROVAL_WORD = re.compile(
     r"\b(?:approved|authori[sz]ed|signed[- ]?off|released|green[- ]?lit|cleared|okayed|ok'?d)\b"
-    r"|\b(?:go-ahead|green light)\b"
+    r"|\b(?:go-ahead|green light|good to go|(?:may|can) (?:now )?proceed|cleared to proceed)\b"
     r"|\b(?:i|we)(?:'ve|'ll| have| will| am| are)?\s+(?:now\s+)?approv(?:e|ing)\b"
-    r"|\bapproval\s+(?:is\s+|has been\s+)?(?:granted|given|complete|completed|done)\b",
+    r"|\bapproval\s+(?:is\s+|has been\s+)?(?:granted|given|complete|completed|done)\b"
+    r"|\b(?:purchase|order|request|po|pr-\d+)\s+(?:is\s+|was\s+|has been\s+)?(?:accepted|confirmed)\b",
     re.I,
+)
+# "Bluegate is an approved supplier" or "the approved policy" describe something else, not a purchase.
+_NOT_A_PURCHASE_AFTER = re.compile(
+    r"^\s+(?:supplier|vendor|policy|policies|list|budget|catalogue|catalog|device|model|sku|template|form)s?\b", re.I
 )
 # Wording right before the approval word that turns it into a negation or a
 # rule ("has not been approved", "can be signed off by"), not a claim.
@@ -89,7 +94,10 @@ def ungrounded_numbers(answer: str, allowed: set[str]) -> set[str]:
 
 
 def claims_approval(sentence: str) -> bool:
-    return any(not _NOT_A_CLAIM_BEFORE.search(sentence[: m.start()]) for m in _APPROVAL_WORD.finditer(sentence))
+    return any(
+        not _NOT_A_CLAIM_BEFORE.search(sentence[: m.start()]) and not _NOT_A_PURCHASE_AFTER.match(sentence[m.end() :])
+        for m in _APPROVAL_WORD.finditer(sentence)
+    )
 
 
 def unsupported_approval(answer: str, approved_prs: set[str]) -> bool:
@@ -113,10 +121,56 @@ def support_score(excerpt: str, answer: str) -> int:
     return sum(2 if any(ch.isdigit() for ch in tok) else 1 for tok in shared)
 
 
-def run_output_checks(answer: str, allowed: set[str], approved_prs: set[str]) -> list[str]:
+def contradicting_figures(excerpt: str, answer: str) -> bool:
+    """True when the cited sentence states amounts and the answer states amounts, and none match.
+
+    "Price is 1,180 AUD" cannot be the support for an answer of "990 AUD".
+    """
+    cited = {n for n in numbers_in(excerpt) if len(n) >= 3}
+    claimed = {n for m in _NUM_GROUP.finditer(ascii_digits(answer)) for n in _number_candidates(m.group(0))}
+    return bool(cited and claimed and not cited & claimed)
+
+
+_QUESTION_WORDS = frozenset(
+    "what when where which who whom whose why how is are was were has have had does do did can could should would "
+    "will shall may might any our the a an please tell show list give i we "
+    # calendar words are capitalised but are not names of anything in the records
+    "january february march april may june july august september october november december "
+    "monday tuesday wednesday thursday friday saturday sunday".split()
+)
+_PROPER_NAME = re.compile(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b")
+
+
+def question_names(question: str) -> list[str]:
+    """Capitalised names in the question (companies, vendors, sites), minus question words."""
+    names = []
+    for m in _PROPER_NAME.finditer(question):
+        words = [w for w in m.group(0).split() if w.lower() not in _QUESTION_WORDS]
+        if words:
+            names.append(" ".join(words))
+    return list(dict.fromkeys(names))
+
+
+def unmentioned_names(question: str, shown_text: str) -> list[str]:
+    """Names from the question that no source shown to the model mentions.
+
+    Uses only the caller's own sources, so the result is the same for a real
+    other customer and for a made-up company: it cannot reveal who the
+    customers are.
+    """
+    haystack = shown_text.lower()
+    return [n for n in question_names(question) if not all(w.lower() in haystack for w in n.split())]
+
+
+def run_output_checks(
+    answer: str, allowed: set[str], approved_prs: set[str], trusted: set[str] | None = None
+) -> list[str]:
+    """allowed: numbers in the cited sources and the question. trusted: the subset backed by curated records."""
     failures = []
     if ungrounded_numbers(answer, allowed):
         failures.append("ungrounded_number_in_answer")
+    elif trusted is not None and ungrounded_numbers(answer, trusted):
+        failures.append("figure_only_in_unverified_source")
     if unsupported_approval(answer, approved_prs):
         failures.append("unsupported_approval_claim")
     if instruction_like(answer):

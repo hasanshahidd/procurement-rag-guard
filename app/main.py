@@ -1,4 +1,8 @@
-"""FastAPI entry point. Run with: uvicorn app.main:app --port 8000"""
+"""FastAPI entry point. Run with: uvicorn app.main:create_app --factory --port 8000
+
+An app factory, not a module-level app, so importing this module (tests, tools)
+never reads settings, opens a database or builds model clients.
+"""
 
 from __future__ import annotations
 
@@ -33,7 +37,7 @@ from app.schemas import (
     TicketCreate,
     TicketCreated,
 )
-from app.store import Document, DuplicateDocumentError, Principal, Store
+from app.store import CURATOR_ROLES, Document, DuplicateDocumentError, Principal, Store
 
 log = logging.getLogger("procurement")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -41,7 +45,6 @@ _api_key = APIKeyHeader(
     name="X-API-Key", auto_error=False, description="Synthetic demo key, see data/seed/principals.json"
 )
 _ID_PREFIX = {"ticket": "TCK", "log": "LOG", "kb": "KB"}
-_CURATOR_ROLES = frozenset({"buyer", "approver"})
 _ERRORS = {
     401: "unauthorized",
     403: "forbidden",
@@ -108,6 +111,8 @@ def create_app(
     def principal(request: Request, api_key: str | None = Depends(_api_key)) -> Principal:
         found = store.authenticate(api_key)
         if found is None:
+            # Failed attempts are limited too, per client address, so keys cannot be guessed at full speed.
+            limiter.check(f"anonymous:{request.client.host if request.client else 'unknown'}")
             raise AppError(401, "unauthorized", "Missing or unknown X-API-Key header")
         limiter.check(f"{found.tenant_id}:{found.role}")  # per principal, not per path, so ids cannot dodge it
         return found
@@ -179,10 +184,14 @@ def create_app(
 def _build_document(store: Store, who: Principal, body: TicketCreate) -> Document:
     if body.sensitivity not in who.clearance:
         raise AppError(403, "forbidden", f"Role '{who.role}' cannot create {body.sensitivity} records")
-    if (body.facts or body.supersedes) and who.role not in _CURATOR_ROLES:
+    if (body.facts or body.supersedes) and who.role not in CURATOR_ROLES:
         raise AppError(403, "forbidden", "Only buyers and approvers can set facts or supersede records")
-    if body.id and body.id.startswith("TOOL-"):
-        raise AppError(422, "reserved_id", "Ids starting with TOOL- are reserved for tool output")
+    if who.role not in CURATOR_ROLES and (body.kind != "ticket" or body.id):
+        # Requesters file tickets; knowledge-base entries, logs and chosen ids are curator actions.
+        # Server-assigned ids also mean a requester cannot test which ids exist.
+        raise AppError(403, "forbidden", "Requesters can only file tickets, with a server-assigned id")
+    if body.id and not body.id.startswith(_ID_PREFIX[body.kind] + "-"):
+        raise AppError(422, "reserved_id", f"A {body.kind} id must start with {_ID_PREFIX[body.kind]}-")
     if any(key.startswith("pr_status") for key in body.facts):
         raise AppError(422, "reserved_fact", "Purchase status comes from the purchasing system, not from tickets")
     for sid in body.supersedes:
@@ -200,6 +209,7 @@ def _build_document(store: Store, who: Principal, body: TicketCreate) -> Documen
         supersedes=body.supersedes,
         facts=body.facts,
         origin="api",
+        author_role=who.role,
     )
     if doc.scan.flagged and (body.supersedes or body.facts):
         # A record with injected text may be stored and read as data, but may not reshape other records.
@@ -238,6 +248,3 @@ def _install_error_handlers(app: FastAPI) -> None:
     async def _unexpected(_: Request, exc: Exception) -> JSONResponse:
         log.exception("unhandled error", exc_info=exc)
         return _error(500, "internal_error", "Unexpected server error. See server logs.")
-
-
-app = create_app()
