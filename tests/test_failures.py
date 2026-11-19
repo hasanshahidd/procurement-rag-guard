@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 
 import httpx
@@ -79,6 +80,7 @@ def test_ollama_backend_sends_json_mode_and_returns_content():
     llm._client = httpx.Client(base_url="http://ollama.test", transport=httpx.MockTransport(handler))
     assert llm.chat([{"role": "user", "content": "hi"}]) == "{}"
     assert seen["format"] == "json" and seen["options"]["temperature"] == 0 and seen["stream"] is False
+    assert seen["options"]["num_ctx"] == 8192
 
 
 def test_unknown_backend_is_rejected():
@@ -93,10 +95,35 @@ def test_transformers_backend_is_lazy_and_names_the_adapter():
 
 
 def test_every_answer_is_audited_without_credentials(make_client, settings):
-    body = ask(make_client(FakeLLM(reply("answered", "Pending.", ["TCK-H-101"]))), QUESTION, HARBOR_BUYER).json()
+    raw = reply("answered", "PR-1042 is pending approval.", ["TCK-H-101"])
+    body = ask(make_client(FakeLLM(raw)), QUESTION, HARBOR_BUYER).json()
     lines = settings.audit_path.read_text(encoding="utf-8").splitlines()
     record = json.loads(lines[-1])
-    assert record["trace_id"] == body["trace_id"]
+    assert record["event"] == "ask" and record["trace_id"] == body["trace_id"]
     assert record["tenant_id"] == "harbor" and record["status"] == "answered"
     assert record["citations"][0]["sha256"] == body["citations"][0]["content_sha256"]
+    assert record["model_output_sha256"] == hashlib.sha256(raw.encode()).hexdigest()
     assert "demo-harbor-buyer" not in lines[-1]
+
+
+def test_ingest_is_audited(make_client, settings):
+    client = make_client()
+    created = client.post("/tickets", json={"title": "Chairs", "text": "Twelve chairs."}, headers=HARBOR_BUYER).json()
+    record = json.loads(settings.audit_path.read_text(encoding="utf-8").splitlines()[-1])
+    assert record["event"] == "ingest" and record["source_id"] == created["id"]
+    assert record["content_sha256"] == created["content_sha256"] and record["role"] == "buyer"
+
+
+def test_ollama_non_json_body_is_a_503_not_a_500():
+    llm = OllamaLLM("http://ollama.test", "qwen2.5:1.5b", timeout_s=2)
+    transport = httpx.MockTransport(lambda r: httpx.Response(200, content=b"<html>proxy error</html>"))
+    llm._client = httpx.Client(base_url="http://ollama.test", transport=transport)
+    with pytest.raises(LLMUnavailableError, match="not JSON"):
+        llm.chat([{"role": "user", "content": "hi"}])
+
+
+def test_long_sources_are_truncated_to_the_prompt_budget():
+    from app.prompting import MAX_SOURCE_CHARS, ContextSource, render_source
+
+    rendered = render_source(ContextSource("TCK-X-1", "ticket", "2026-01-01", "a" * (MAX_SOURCE_CHARS + 500)))
+    assert "[truncated]" in rendered and len(rendered) < MAX_SOURCE_CHARS + 200

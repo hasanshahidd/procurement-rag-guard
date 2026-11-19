@@ -1,0 +1,104 @@
+{
+  "name": "selected",
+  "label": "Run 2, selected (2 epochs, weak classes x2)",
+  "n": 35,
+  "json_valid_rate": 1.0,
+  "status_accuracy": 0.4,
+  "citation_exact_match": 0.314,
+  "citation_precision": 1.0,
+  "citation_recall": 0.214,
+  "citation_f1": 0.353,
+  "injection_n": 7,
+  "injection_resisted_rate": 1.0,
+  "injection_answer_grounded_rate": 0.429,
+  "status_accuracy_by_category": {
+    "answered_single": 0.143,
+    "answered_multi": 0.429,
+    "insufficient_evidence": 1.0,
+    "conflict": 0.0,
+    "injection": 0.429
+  },
+  "status_per_class": {
+    "answered": {
+      "precision": 0.778,
+      "recall": 0.333,
+      "predicted": 9,
+      "gold": 21
+    },
+    "insufficient_evidence": {
+      "precision": 0.269,
+      "recall": 1.0,
+      "predicted": 26,
+      "gold": 7
+    },
+    "conflict": {
+      "precision": null,
+      "recall": 0.0,
+      "predicted": 0,
+      "gold": 7
+    }
+  },
+  "status_confusion": {
+    "answered": {
+      "answered": 7,
+      "insufficient_evidence": 14,
+      "conflict": 0,
+      "invalid": 0
+    },
+    "insufficient_evidence": {
+      "answered": 0,
+      "insufficient_evidence": 7,
+      "conflict": 0,
+      "invalid": 0
+    },
+    "conflict": {
+      "answered": 2,
+      "insufficient_evidence": 5,
+      "conflict": 0,
+      "invalid": 0
+    }
+  },
+  "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "base_model_revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+  "adapter": "finetune/outputs/qwen2.5-0.5b-procurement-lora",
+  "training": {
+    "command": "python -m finetune.train_lora --epochs 2 --lr 2e-4 --grad-accum 2 --threads 4 --oversample insufficient_evidence=2,conflict=2",
+    "epochs": 2,
+    "lr": 0.0002,
+    "grad_accum": 2,
+    "oversample": {
+      "insufficient_evidence": 2,
+      "conflict": 2
+    },
+    "examples_per_epoch": 126,
+    "optimizer_steps": 126,
+    "final_loss": 0.0233,
+    "train_wall_seconds": 3431.5
+  },
+  "generation": {
+    "date": "2026-11-19",
+    "command": "python -m finetune.evaluate --heldout finetune/data/test.jsonl --adapter finetune/outputs/qwen2.5-0.5b-procurement-lora --name selected --label \"Run 2, selected (2 epochs, weak classes x2)\" --out-dir finetune/results/test_split --threads 4",
+    "heldout": "finetune/data/test.jsonl",
+    "heldout_sha256": "91c833e16f2e021ec3dac318a9fce169a82985ae823c654ca4b8b0725d12c6fc",
+    "backend": "transformers",
+    "max_new_tokens": 256,
+    "repetition_penalty": 1.1,
+    "torch_threads": 4,
+    "environment": {
+      "python": "3.11.9",
+      "platform": "Windows-10-10.0.26200-SP0",
+      "cpu": "11th Gen Intel(R) Core(TM) i5-1145G7 @ 2.60GHz",
+      "logical_cpus": 8,
+      "gpu": "none (CPU only)",
+      "torch": "2.15.0+cpu",
+      "transformers": "5.23.0",
+      "peft": "0.21.3",
+      "tokenizers": "0.23.3"
+    },
+    "eval_wall_seconds": 604.7
+  },
+  "scored": {
+    "date": "2026-11-19",
+    "command": "python -m finetune.evaluate --heldout finetune/data/test.jsonl --adapter finetune/outputs/qwen2.5-0.5b-procurement-lora --name selected --label \"Run 2, selected (2 epochs, weak classes x2)\" --out-dir finetune/results/test_split --threads 4"
+  }
+}

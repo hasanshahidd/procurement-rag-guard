@@ -67,10 +67,20 @@ _CONFUSABLES = str.maketrans(
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+|\n")
 
 
+# Only applied to records submitted through the API. Purchase status comes from
+# the purchasing system, so a ticket saying "PR-1042 is cleared" is a claim,
+# not a fact, and is removed before the model reads it.
+_STATUS_CLAIM = re.compile(
+    r"\b(?:approved|cleared|go-ahead|green[- ]light|ok'?d|okayed|authori[sz]ed|signed[- ]off|released)\b", re.I
+)
+
+
 @dataclass(frozen=True)
 class Finding:
     rule: str
     snippet: str
+    start: int = 0
+    end: int = 0
 
 
 @dataclass(frozen=True)
@@ -85,6 +95,17 @@ class ScanResult:
     @property
     def rules(self) -> list[str]:
         return sorted({f.rule for f in self.findings})
+
+    @property
+    def spans(self) -> list[tuple[int, int, list[str]]]:
+        """(start, end, rules) of each removed sentence, as offsets into the original text."""
+        grouped: dict[tuple[int, int], list[str]] = {}
+        for f in self.findings:
+            grouped.setdefault((f.start, f.end), []).append(f.rule)
+        return [(s, e, sorted(r)) for (s, e), r in sorted(grouped.items())]
+
+    def overlaps(self, start: int, end: int) -> bool:
+        return any(s < end and start < e for s, e, _ in self.spans)
 
 
 def normalise(text: str) -> str:
@@ -109,22 +130,29 @@ def sentence_spans(text: str) -> Iterator[tuple[int, int]]:
         yield pos, len(text)
 
 
-def matching_rules(sentence: str) -> list[str]:
+def matching_rules(sentence: str, status_claims: bool = False) -> list[str]:
     norm = normalise(sentence)
-    return [name for name, rx in _RULES.items() if rx.search(norm)]
+    hits = [name for name, rx in _RULES.items() if rx.search(norm)]
+    if status_claims and _STATUS_CLAIM.search(norm):
+        hits.append("status_claim")
+    return hits
 
 
-def scan(text: str) -> ScanResult:
-    """Remove instruction-like sentences from untrusted text and report what was removed."""
+def scan(text: str, status_claims: bool = False) -> ScanResult:
+    """Remove instruction-like sentences from untrusted text and report what was removed.
+
+    status_claims=True also removes approval-status statements; used for records
+    submitted through the API, which are never a source of purchase status.
+    """
     findings: list[Finding] = []
     pieces: list[str] = []
     pos = 0
     for start, end in sentence_spans(text):
         pieces.append(text[pos:start])
         sentence = text[start:end]
-        hits = matching_rules(sentence)
+        hits = matching_rules(sentence, status_claims)
         if hits:
-            findings.extend(Finding(rule, sentence.strip()[:160]) for rule in hits)
+            findings.extend(Finding(rule, sentence.strip()[:160], start, end) for rule in hits)
             pieces.append(REMOVED_MARKER)
         else:
             pieces.append(sentence)

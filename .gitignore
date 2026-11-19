@@ -7,6 +7,7 @@ venv/
 .coverage
 htmlcov/
 logs/
+*.sqlite3
 reports/repro_audit.jsonl
 finetune/outputs/**/checkpoint-*/
 .env

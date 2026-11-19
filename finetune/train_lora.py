@@ -4,7 +4,11 @@ Plain PyTorch loop on CPU. Loss is computed on the assistant reply tokens only;
 the prompt is built with app.prompting.build_messages, so the adapter sees the
 same system prompt and source rendering as the API.
 
-    python -m finetune.train_lora --epochs 2
+Commands of the recorded runs (all with --grad-accum 2 --threads 4):
+
+    python -m finetune.train_lora --epochs 1 --lr 3e-4                                         (run 1)
+    python -m finetune.train_lora --epochs 2 --lr 2e-4 --oversample insufficient_evidence=2,conflict=2  (run 2)
+    python -m finetune.train_lora --epochs 2 --lr 2e-4 --output-dir <run 3 folder>               (run 3)
 """
 
 from __future__ import annotations
@@ -28,9 +32,12 @@ from finetune.common import (
     DATA_DIR,
     DEFAULT_THREADS,
     MODEL_ID,
+    MODEL_REVISION,
     environment,
+    epoch_order,
     load_jsonl,
     load_model,
+    parse_oversample,
     rel,
     sha256,
     to_messages,
@@ -43,12 +50,18 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--train", type=Path, default=DATA_DIR / "train.jsonl")
     p.add_argument("--output-dir", type=Path, default=ADAPTER_DIR)
-    # Defaults are the settings of the recorded run: 1 epoch fits the ~40 min CPU budget.
+    # Defaults reproduce run 1. Run 2 passes its settings explicitly (recorded in run_info.json).
     p.add_argument("--epochs", type=int, default=1)
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--max-len", type=int, default=1024, help="examples longer than this are skipped, not cut")
     p.add_argument("--limit", type=int, default=0, help="use only the first N training rows (0 = all)")
     p.add_argument("--grad-accum", type=int, default=2)
+    p.add_argument(
+        "--oversample",
+        type=parse_oversample,
+        default={},
+        help="repeat rows of a category within each epoch, e.g. insufficient_evidence=3,conflict=3",
+    )
     p.add_argument("--rank", type=int, default=8)
     p.add_argument("--alpha", type=int, default=16)
     p.add_argument("--dropout", type=float, default=0.05)
@@ -78,7 +91,7 @@ def build_examples(tok, rows: list[dict], max_len: int) -> tuple[list[dict], lis
         if len(ids) > max_len:
             skipped.append(row["id"])
             continue
-        examples.append({"input_ids": torch.tensor([ids]), "n_reply": n_reply})
+        examples.append({"input_ids": torch.tensor([ids]), "n_reply": n_reply, "category": row["category"]})
     return examples, skipped, longest
 
 
@@ -96,12 +109,14 @@ def reply_loss(model, ex: dict) -> torch.Tensor:
 def train(model, examples: list[dict], args: argparse.Namespace) -> list[dict]:
     params = [p for p in model.parameters() if p.requires_grad]
     opt = torch.optim.AdamW(params, lr=args.lr, weight_decay=0.0)
-    total = math.ceil(len(examples) / args.grad_accum) * args.epochs
+    categories = [ex["category"] for ex in examples]
+    per_epoch = sum(args.oversample.get(c, 1) for c in categories)
+    total = math.ceil(per_epoch / args.grad_accum) * args.epochs
     sched = LambdaLR(opt, lambda s: max(0.0, 1 - s / total))  # linear decay to zero
     rng, log = random.Random(args.seed), []
     model.train()
     for epoch in range(1, args.epochs + 1):
-        order = rng.sample(range(len(examples)), len(examples))
+        order = epoch_order(categories, args.oversample, rng)
         for start in range(0, len(order), args.grad_accum):
             batch, t0, step_loss = order[start : start + args.grad_accum], time.perf_counter(), 0.0
             for idx in batch:
@@ -166,12 +181,14 @@ def main(argv: list[str] | None = None) -> None:
         "finished_utc": datetime.now(UTC).isoformat(timespec="seconds"),
         "command": "python -m finetune.train_lora " + " ".join(sys.argv[1:] if argv is None else argv),
         "base_model": MODEL_ID,
+        "base_model_revision": MODEL_REVISION,
         "environment": {**environment(), "torch_threads": torch.get_num_threads()},
         "hyperparameters": {k: rel(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
         "lora_target_modules": TARGET_MODULES,
         "trainable_params": trainable,
         "dataset": {"path": rel(args.train), "sha256": sha256(args.train), "rows_used": len(rows)},
         "examples_trained": len(examples),
+        "examples_per_epoch_after_oversampling": sum(args.oversample.get(e["category"], 1) for e in examples),
         "skipped_too_long": skipped,
         "longest_example_tokens": longest,
         "optimizer_steps": len(log),

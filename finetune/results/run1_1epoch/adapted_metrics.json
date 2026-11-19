@@ -36,5 +36,5 @@
     "tokenizers": "0.23.3"
   },
   "repetition_penalty": 1.1,
-  "adapter": "finetune/outputs/qwen2.5-0.5b-procurement-lora"
+  "adapter": "finetune/outputs/run1_1epoch/qwen2.5-0.5b-procurement-lora"
 }

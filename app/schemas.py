@@ -4,10 +4,10 @@ cannot smuggle tenant_id or role through the body."""
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, timedelta
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 
 DocId = Annotated[str, Field(pattern=r"^[A-Z]{2,5}-[A-Z0-9][A-Z0-9-]{0,30}$")]
 _FACT_KEY = re.compile(r"[a-z_]{2,40}(:[A-Z0-9-]{1,30})?")
@@ -32,7 +32,7 @@ class _Strict(BaseModel):
 
 class AskRequest(_Strict):
     question: str = Field(min_length=3, max_length=1000)
-    top_k: int = Field(default=4, ge=1, le=8)
+    top_k: StrictInt = Field(default=4, ge=1, le=8)  # strict: "3" and true are rejected, not coerced
 
 
 class TicketCreate(_Strict):
@@ -44,6 +44,14 @@ class TicketCreate(_Strict):
     updated_at: date | None = None
     supersedes: list[DocId] = Field(default_factory=list, max_length=10)
     facts: dict[str, str] = Field(default_factory=dict, max_length=20)
+
+    @field_validator("updated_at")
+    @classmethod
+    def _not_in_future(cls, v: date | None) -> date | None:
+        # A future date would make a record look newer than everything else.
+        if v is not None and v > date.today() + timedelta(days=1):
+            raise ValueError("updated_at cannot be in the future")
+        return v
 
     @field_validator("facts")
     @classmethod
@@ -112,7 +120,9 @@ class SecurityReport(BaseModel):
 
 class RetrievedSource(BaseModel):
     source_id: str
-    score: float
+    score: float = Field(description="Fused rank score used for ordering")
+    bm25: float | None = None
+    dense: float | None = Field(default=None, description="Cosine similarity, when embeddings are on")
 
 
 class AgentStep(BaseModel):
@@ -134,6 +144,12 @@ class AskResponse(BaseModel):
     model: str
 
 
+class FlaggedSpan(BaseModel):
+    start: int
+    end: int
+    rules: list[str]
+
+
 class SourceView(BaseModel):
     id: str
     tenant_id: str
@@ -144,6 +160,9 @@ class SourceView(BaseModel):
     sensitivity: str
     content_sha256: str
     injection_flags: list[str]
+    flagged_spans: list[FlaggedSpan] = Field(
+        default=[], description="Sentences the guard removed before the model saw this source (code point offsets)"
+    )
 
 
 class HealthResponse(BaseModel):
@@ -151,6 +170,7 @@ class HealthResponse(BaseModel):
     version: str
     documents: int
     llm: dict
+    retrieval: dict = {}
 
 
 class ErrorBody(BaseModel):

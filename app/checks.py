@@ -9,16 +9,19 @@ import re
 import unicodedata
 
 from app.guard import matching_rules, normalise, sentence_spans
+from app.retrieval import tokenize
 
 # Guard rules that only make sense as text aimed at an AI. Approval or
 # disclosure wording is left out because an honest answer may describe the
 # attack ("the quote asked to reveal pricing").
 ANSWER_RULES = frozenset({"role_marker", "chat_template_token", "persona_switch", "ignore_instructions"})
+MIN_SUPPORT = 2  # a cited sentence must share one id or number, or two words, with the answer
 
 _NUM_GROUP = re.compile(r"\d+(?:[\s.,_'  ]+\d+)*")
 _PR_ID = re.compile(r"\bPR-\d+\b", re.I)
 _APPROVAL_WORD = re.compile(
-    r"\b(?:approved|authori[sz]ed|signed[- ]?off|released|green[- ]?lit)\b"
+    r"\b(?:approved|authori[sz]ed|signed[- ]?off|released|green[- ]?lit|cleared|okayed|ok'?d)\b"
+    r"|\b(?:go-ahead|green light)\b"
     r"|\b(?:i|we)(?:'ve|'ll| have| will| am| are)?\s+(?:now\s+)?approv(?:e|ing)\b"
     r"|\bapproval\s+(?:is\s+|has been\s+)?(?:granted|given|complete|completed|done)\b",
     re.I,
@@ -32,6 +35,7 @@ _NOT_A_CLAIM_BEFORE = re.compile(
     r"\s+(?:[\w-]+\s+){0,3}$",
     re.I,
 )
+_IDENTIFIER = re.compile(r"^[a-z][a-z_]{2,39}$")
 
 
 def ascii_digits(text: str) -> str:
@@ -41,10 +45,10 @@ def ascii_digits(text: str) -> str:
 
 
 def numbers_in(text: str) -> set[str]:
-    """Digit strings in text, including ones split by spaces, dots, commas or underscores.
+    """Every way the digits in text can be read: each run, and each group joined.
 
-    "1 045", "1.045", "1,0 45" and "1_045" all yield "1045". Each run is also
-    kept on its own, so "1045 12" still yields "1045".
+    "1 045", "1.045", "1,0 45" and "1_045" all yield "1045". Used to build the
+    allowlist from the sources and the question.
     """
     found: set[str] = set()
     for m in _NUM_GROUP.finditer(ascii_digits(text)):
@@ -53,8 +57,35 @@ def numbers_in(text: str) -> set[str]:
     return found
 
 
-def leaked_numbers(answer: str, hidden: set[str], allowed: set[str]) -> set[str]:
-    return (numbers_in(answer) & hidden) - allowed
+def _number_candidates(group: str) -> set[str]:
+    """Numbers a group of digits in the answer could stand for.
+
+    Every run of 3+ digits counts on its own ("1045 1042" gives both). A group
+    made only of short runs ("1 0 4 5", "1,0 45") or written with thousand
+    separators ("1,045", "1 045") also counts as the joined number. A short
+    trailing decimal part ("1175.00") is not joined.
+    """
+    runs = re.findall(r"\d+", group)
+    candidates = {r for r in runs if len(r) >= 3}
+    thousands = len(runs) > 1 and 1 <= len(runs[0]) <= 3 and all(len(r) == 3 for r in runs[1:])
+    if thousands or not candidates:
+        joined = "".join(runs)
+        if len(joined) >= 3:
+            candidates.add(joined)
+    return candidates
+
+
+def ungrounded_numbers(answer: str, allowed: set[str]) -> set[str]:
+    """Numbers (3+ digits) in the answer that are in no source shown to the model and not in the question.
+
+    An allowlist on purpose: the decision never looks at other tenants' data, so
+    whether an answer passes cannot be used to probe hidden values, and it also
+    catches figures the model made up.
+    """
+    found: set[str] = set()
+    for m in _NUM_GROUP.finditer(ascii_digits(answer)):
+        found |= _number_candidates(m.group(0)) - allowed
+    return found
 
 
 def claims_approval(sentence: str) -> bool:
@@ -62,7 +93,7 @@ def claims_approval(sentence: str) -> bool:
 
 
 def unsupported_approval(answer: str, approved_prs: set[str]) -> bool:
-    """True when the answer says something is approved and the records do not back it."""
+    """True when the answer says something is approved and the system-of-record facts do not back it."""
     for start, end in sentence_spans(answer):
         sentence = normalise(answer[start:end])
         if claims_approval(sentence):
@@ -76,10 +107,16 @@ def instruction_like(answer: str) -> bool:
     return any(ANSWER_RULES & set(matching_rules(answer[s:e])) for s, e in sentence_spans(answer))
 
 
-def run_output_checks(answer: str, hidden: set[str], allowed: set[str], approved_prs: set[str]) -> list[str]:
+def support_score(excerpt: str, answer: str) -> int:
+    """How much a cited sentence shares with the answer: ids and numbers count 2, other words 1."""
+    shared = set(tokenize(excerpt, parts=False)) & set(tokenize(answer, parts=False))
+    return sum(2 if any(ch.isdigit() for ch in tok) else 1 for tok in shared)
+
+
+def run_output_checks(answer: str, allowed: set[str], approved_prs: set[str]) -> list[str]:
     failures = []
-    if leaked_numbers(answer, hidden, allowed):
-        failures.append("restricted_value_in_answer")
+    if ungrounded_numbers(answer, allowed):
+        failures.append("ungrounded_number_in_answer")
     if unsupported_approval(answer, approved_prs):
         failures.append("unsupported_approval_claim")
     if instruction_like(answer):
@@ -87,14 +124,11 @@ def run_output_checks(answer: str, hidden: set[str], allowed: set[str], approved
     return failures
 
 
-_IDENTIFIER = re.compile(r"^[a-z][a-z_]{2,39}$")
-
-
 def describe_extra_field(key: str, value: object) -> str:
     """Summarise a field the model added (for example "actions") without echoing its content.
 
     Only identifier-like words such as tool names are kept, so a model cannot
-    use this field to smuggle a value past the leak check.
+    use this field to smuggle a value past the number check.
     """
     safe_key = key if _IDENTIFIER.match(key) else "<field>"
     words: set[str] = set()

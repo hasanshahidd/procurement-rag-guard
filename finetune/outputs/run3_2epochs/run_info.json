@@ -1,0 +1,595 @@
+{
+  "finished_utc": "2026-11-19T12:50:40+00:00",
+  "command": "python -m finetune.train_lora --epochs 2 --lr 2e-4 --grad-accum 2 --threads 4 --output-dir finetune/outputs/run3_2epochs/qwen2.5-0.5b-procurement-lora",
+  "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "environment": {
+    "python": "3.11.9",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "cpu": "11th Gen Intel(R) Core(TM) i5-1145G7 @ 2.60GHz",
+    "logical_cpus": 8,
+    "gpu": "none (CPU only)",
+    "torch": "2.15.0+cpu",
+    "transformers": "5.23.0",
+    "peft": "0.21.3",
+    "tokenizers": "0.23.3",
+    "torch_threads": 4
+  },
+  "hyperparameters": {
+    "train": "finetune/data/train.jsonl",
+    "output_dir": "finetune/outputs/run3_2epochs/qwen2.5-0.5b-procurement-lora",
+    "epochs": 2,
+    "lr": 0.0002,
+    "max_len": 1024,
+    "limit": 0,
+    "grad_accum": 2,
+    "oversample": {},
+    "rank": 8,
+    "alpha": 16,
+    "dropout": 0.05,
+    "seed": 13,
+    "threads": 4
+  },
+  "lora_target_modules": [
+    "q_proj",
+    "k_proj",
+    "v_proj",
+    "o_proj"
+  ],
+  "trainable_params": 1081344,
+  "dataset": {
+    "path": "finetune/data/train.jsonl",
+    "sha256": "fbd4092a9e20dd2de9d34d0978460e5ce9140bbed3bce13fdf7125e590d6e6ed",
+    "rows_used": 90
+  },
+  "examples_trained": 90,
+  "examples_per_epoch_after_oversampling": 90,
+  "skipped_too_long": [],
+  "longest_example_tokens": 592,
+  "optimizer_steps": 90,
+  "final_loss": 0.192,
+  "train_wall_seconds": 2505.8,
+  "loss_log": [
+    {
+      "step": 1,
+      "epoch": 1,
+      "loss": 0.7348,
+      "seconds": 37.29
+    },
+    {
+      "step": 2,
+      "epoch": 1,
+      "loss": 1.1933,
+      "seconds": 31.27
+    },
+    {
+      "step": 3,
+      "epoch": 1,
+      "loss": 0.9075,
+      "seconds": 23.01
+    },
+    {
+      "step": 4,
+      "epoch": 1,
+      "loss": 0.3851,
+      "seconds": 28.19
+    },
+    {
+      "step": 5,
+      "epoch": 1,
+      "loss": 0.9338,
+      "seconds": 23.56
+    },
+    {
+      "step": 6,
+      "epoch": 1,
+      "loss": 0.7853,
+      "seconds": 17.09
+    },
+    {
+      "step": 7,
+      "epoch": 1,
+      "loss": 0.8681,
+      "seconds": 29.14
+    },
+    {
+      "step": 8,
+      "epoch": 1,
+      "loss": 0.4454,
+      "seconds": 34.87
+    },
+    {
+      "step": 9,
+      "epoch": 1,
+      "loss": 0.6152,
+      "seconds": 29.73
+    },
+    {
+      "step": 10,
+      "epoch": 1,
+      "loss": 0.7168,
+      "seconds": 24.43
+    },
+    {
+      "step": 11,
+      "epoch": 1,
+      "loss": 0.7143,
+      "seconds": 15.05
+    },
+    {
+      "step": 12,
+      "epoch": 1,
+      "loss": 1.1135,
+      "seconds": 34.48
+    },
+    {
+      "step": 13,
+      "epoch": 1,
+      "loss": 0.5738,
+      "seconds": 41.15
+    },
+    {
+      "step": 14,
+      "epoch": 1,
+      "loss": 0.7834,
+      "seconds": 33.94
+    },
+    {
+      "step": 15,
+      "epoch": 1,
+      "loss": 0.839,
+      "seconds": 30.74
+    },
+    {
+      "step": 16,
+      "epoch": 1,
+      "loss": 0.4007,
+      "seconds": 23.93
+    },
+    {
+      "step": 17,
+      "epoch": 1,
+      "loss": 0.6566,
+      "seconds": 34.62
+    },
+    {
+      "step": 18,
+      "epoch": 1,
+      "loss": 0.4658,
+      "seconds": 33.15
+    },
+    {
+      "step": 19,
+      "epoch": 1,
+      "loss": 0.491,
+      "seconds": 26.6
+    },
+    {
+      "step": 20,
+      "epoch": 1,
+      "loss": 0.3387,
+      "seconds": 29.54
+    },
+    {
+      "step": 21,
+      "epoch": 1,
+      "loss": 0.5219,
+      "seconds": 19.18
+    },
+    {
+      "step": 22,
+      "epoch": 1,
+      "loss": 0.2463,
+      "seconds": 27.54
+    },
+    {
+      "step": 23,
+      "epoch": 1,
+      "loss": 0.2665,
+      "seconds": 29.19
+    },
+    {
+      "step": 24,
+      "epoch": 1,
+      "loss": 0.4368,
+      "seconds": 22.62
+    },
+    {
+      "step": 25,
+      "epoch": 1,
+      "loss": 0.4353,
+      "seconds": 21.92
+    },
+    {
+      "step": 26,
+      "epoch": 1,
+      "loss": 0.4212,
+      "seconds": 11.95
+    },
+    {
+      "step": 27,
+      "epoch": 1,
+      "loss": 0.7579,
+      "seconds": 13.86
+    },
+    {
+      "step": 28,
+      "epoch": 1,
+      "loss": 0.5071,
+      "seconds": 15.72
+    },
+    {
+      "step": 29,
+      "epoch": 1,
+      "loss": 0.4835,
+      "seconds": 20.3
+    },
+    {
+      "step": 30,
+      "epoch": 1,
+      "loss": 0.3539,
+      "seconds": 21.16
+    },
+    {
+      "step": 31,
+      "epoch": 1,
+      "loss": 0.3613,
+      "seconds": 17.92
+    },
+    {
+      "step": 32,
+      "epoch": 1,
+      "loss": 0.4805,
+      "seconds": 17.22
+    },
+    {
+      "step": 33,
+      "epoch": 1,
+      "loss": 0.4558,
+      "seconds": 24.98
+    },
+    {
+      "step": 34,
+      "epoch": 1,
+      "loss": 0.5518,
+      "seconds": 24.59
+    },
+    {
+      "step": 35,
+      "epoch": 1,
+      "loss": 0.3329,
+      "seconds": 24.62
+    },
+    {
+      "step": 36,
+      "epoch": 1,
+      "loss": 0.1613,
+      "seconds": 25.96
+    },
+    {
+      "step": 37,
+      "epoch": 1,
+      "loss": 0.2995,
+      "seconds": 27.33
+    },
+    {
+      "step": 38,
+      "epoch": 1,
+      "loss": 0.4844,
+      "seconds": 18.16
+    },
+    {
+      "step": 39,
+      "epoch": 1,
+      "loss": 0.3887,
+      "seconds": 16.53
+    },
+    {
+      "step": 40,
+      "epoch": 1,
+      "loss": 0.1906,
+      "seconds": 18.63
+    },
+    {
+      "step": 41,
+      "epoch": 1,
+      "loss": 0.1988,
+      "seconds": 22.13
+    },
+    {
+      "step": 42,
+      "epoch": 1,
+      "loss": 0.3015,
+      "seconds": 19.97
+    },
+    {
+      "step": 43,
+      "epoch": 1,
+      "loss": 0.4756,
+      "seconds": 21.55
+    },
+    {
+      "step": 44,
+      "epoch": 1,
+      "loss": 0.2745,
+      "seconds": 21.19
+    },
+    {
+      "step": 45,
+      "epoch": 1,
+      "loss": 0.19,
+      "seconds": 16.92
+    },
+    {
+      "step": 46,
+      "epoch": 2,
+      "loss": 0.175,
+      "seconds": 19.32
+    },
+    {
+      "step": 47,
+      "epoch": 2,
+      "loss": 0.2685,
+      "seconds": 27.02
+    },
+    {
+      "step": 48,
+      "epoch": 2,
+      "loss": 0.1507,
+      "seconds": 22.72
+    },
+    {
+      "step": 49,
+      "epoch": 2,
+      "loss": 0.218,
+      "seconds": 21.32
+    },
+    {
+      "step": 50,
+      "epoch": 2,
+      "loss": 0.1363,
+      "seconds": 18.72
+    },
+    {
+      "step": 51,
+      "epoch": 2,
+      "loss": 0.1647,
+      "seconds": 14.08
+    },
+    {
+      "step": 52,
+      "epoch": 2,
+      "loss": 0.3074,
+      "seconds": 16.05
+    },
+    {
+      "step": 53,
+      "epoch": 2,
+      "loss": 0.2726,
+      "seconds": 28.5
+    },
+    {
+      "step": 54,
+      "epoch": 2,
+      "loss": 0.2448,
+      "seconds": 21.83
+    },
+    {
+      "step": 55,
+      "epoch": 2,
+      "loss": 0.1755,
+      "seconds": 24.08
+    },
+    {
+      "step": 56,
+      "epoch": 2,
+      "loss": 0.1598,
+      "seconds": 34.29
+    },
+    {
+      "step": 57,
+      "epoch": 2,
+      "loss": 0.2898,
+      "seconds": 24.91
+    },
+    {
+      "step": 58,
+      "epoch": 2,
+      "loss": 0.0899,
+      "seconds": 40.97
+    },
+    {
+      "step": 59,
+      "epoch": 2,
+      "loss": 0.1535,
+      "seconds": 40.5
+    },
+    {
+      "step": 60,
+      "epoch": 2,
+      "loss": 0.3318,
+      "seconds": 37.87
+    },
+    {
+      "step": 61,
+      "epoch": 2,
+      "loss": 0.3193,
+      "seconds": 19.2
+    },
+    {
+      "step": 62,
+      "epoch": 2,
+      "loss": 0.3733,
+      "seconds": 20.61
+    },
+    {
+      "step": 63,
+      "epoch": 2,
+      "loss": 0.179,
+      "seconds": 25.14
+    },
+    {
+      "step": 64,
+      "epoch": 2,
+      "loss": 0.1976,
+      "seconds": 37.07
+    },
+    {
+      "step": 65,
+      "epoch": 2,
+      "loss": 0.3642,
+      "seconds": 34.07
+    },
+    {
+      "step": 66,
+      "epoch": 2,
+      "loss": 0.152,
+      "seconds": 20.23
+    },
+    {
+      "step": 67,
+      "epoch": 2,
+      "loss": 0.1292,
+      "seconds": 27.55
+    },
+    {
+      "step": 68,
+      "epoch": 2,
+      "loss": 0.2926,
+      "seconds": 31.46
+    },
+    {
+      "step": 69,
+      "epoch": 2,
+      "loss": 0.2572,
+      "seconds": 30.19
+    },
+    {
+      "step": 70,
+      "epoch": 2,
+      "loss": 0.2029,
+      "seconds": 28.27
+    },
+    {
+      "step": 71,
+      "epoch": 2,
+      "loss": 0.158,
+      "seconds": 25.07
+    },
+    {
+      "step": 72,
+      "epoch": 2,
+      "loss": 0.1801,
+      "seconds": 18.21
+    },
+    {
+      "step": 73,
+      "epoch": 2,
+      "loss": 0.1603,
+      "seconds": 18.18
+    },
+    {
+      "step": 74,
+      "epoch": 2,
+      "loss": 0.14,
+      "seconds": 33.39
+    },
+    {
+      "step": 75,
+      "epoch": 2,
+      "loss": 0.2418,
+      "seconds": 35.41
+    },
+    {
+      "step": 76,
+      "epoch": 2,
+      "loss": 0.1609,
+      "seconds": 21.9
+    },
+    {
+      "step": 77,
+      "epoch": 2,
+      "loss": 0.3657,
+      "seconds": 27.08
+    },
+    {
+      "step": 78,
+      "epoch": 2,
+      "loss": 0.1688,
+      "seconds": 14.63
+    },
+    {
+      "step": 79,
+      "epoch": 2,
+      "loss": 0.2336,
+      "seconds": 14.98
+    },
+    {
+      "step": 80,
+      "epoch": 2,
+      "loss": 0.3168,
+      "seconds": 38.11
+    },
+    {
+      "step": 81,
+      "epoch": 2,
+      "loss": 0.2526,
+      "seconds": 88.06
+    },
+    {
+      "step": 82,
+      "epoch": 2,
+      "loss": 0.0676,
+      "seconds": 26.21
+    },
+    {
+      "step": 83,
+      "epoch": 2,
+      "loss": 0.1125,
+      "seconds": 20.16
+    },
+    {
+      "step": 84,
+      "epoch": 2,
+      "loss": 0.0987,
+      "seconds": 25.26
+    },
+    {
+      "step": 85,
+      "epoch": 2,
+      "loss": 0.1333,
+      "seconds": 55.64
+    },
+    {
+      "step": 86,
+      "epoch": 2,
+      "loss": 0.2837,
+      "seconds": 109.99
+    },
+    {
+      "step": 87,
+      "epoch": 2,
+      "loss": 0.1293,
+      "seconds": 53.72
+    },
+    {
+      "step": 88,
+      "epoch": 2,
+      "loss": 0.2623,
+      "seconds": 37.16
+    },
+    {
+      "step": 89,
+      "epoch": 2,
+      "loss": 0.0876,
+      "seconds": 40.68
+    },
+    {
+      "step": 90,
+      "epoch": 2,
+      "loss": 0.192,
+      "seconds": 33.0
+    }
+  ],
+  "base_model_revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+  "base_model_revision_note": "Added after the run, when the revision was pinned in finetune/common.py. The local Hugging Face cache has only ever held this one snapshot of the base model, so this is the revision the run loaded."
+}

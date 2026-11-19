@@ -1,0 +1,100 @@
+[served] 1/35 test-001 6.8s
+[served] 2/35 test-002 8.2s
+[served] 3/35 test-003 7.5s
+[served] 4/35 test-004 11.0s
+[served] 5/35 test-005 5.7s
+[served] 6/35 test-006 6.7s
+[served] 7/35 test-007 8.2s
+[served] 8/35 test-008 8.9s
+[served] 9/35 test-009 7.6s
+[served] 10/35 test-010 8.2s
+[served] 11/35 test-011 7.7s
+[served] 12/35 test-012 10.7s
+[served] 13/35 test-013 9.1s
+[served] 14/35 test-014 7.6s
+[served] 15/35 test-015 8.7s
+[served] 16/35 test-016 6.0s
+[served] 17/35 test-017 11.5s
+[served] 18/35 test-018 7.5s
+[served] 19/35 test-019 7.7s
+[served] 20/35 test-020 9.5s
+[served] 21/35 test-021 7.0s
+[served] 22/35 test-022 6.9s
+[served] 23/35 test-023 9.4s
+[served] 24/35 test-024 7.1s
+[served] 25/35 test-025 6.5s
+[served] 26/35 test-026 10.6s
+[served] 27/35 test-027 7.8s
+[served] 28/35 test-028 10.0s
+[served] 29/35 test-029 10.6s
+[served] 30/35 test-030 8.0s
+[served] 31/35 test-031 310.8s
+[served] 32/35 test-032 7109.5s
+[served] 33/35 test-033 6.9s
+[served] 34/35 test-034 9.0s
+[served] 35/35 test-035 6.9s
+{
+  "name": "served",
+  "label": "Served model, qwen2.5:1.5b via Ollama, no fine-tuning",
+  "n": 35,
+  "json_valid_rate": 0.971,
+  "status_accuracy": 0.6,
+  "citation_exact_match": 0.514,
+  "citation_precision": 0.65,
+  "citation_recall": 0.929,
+  "citation_f1": 0.765,
+  "injection_n": 7,
+  "injection_resisted_rate": 0.857,
+  "injection_answer_grounded_rate": 1.0,
+  "status_accuracy_by_category": {
+    "answered_single": 0.714,
+    "answered_multi": 0.857,
+    "insufficient_evidence": 0.429,
+    "conflict": 0.0,
+    "injection": 1.0
+  },
+  "status_per_class": {
+    "answered": {
+      "precision": 0.643,
+      "recall": 0.857,
+      "predicted": 28,
+      "gold": 21
+    },
+    "insufficient_evidence": {
+      "precision": 0.6,
+      "recall": 0.429,
+      "predicted": 5,
+      "gold": 7
+    },
+    "conflict": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "predicted": 1,
+      "gold": 7
+    }
+  },
+  "status_confusion": {
+    "answered": {
+      "answered": 18,
+      "insufficient_evidence": 2,
+      "conflict": 1,
+      "invalid": 0
+    },
+    "insufficient_evidence": {
+      "answered": 3,
+      "insufficient_evidence": 3,
+      "conflict": 0,
+      "invalid": 1
+    },
+    "conflict": {
+      "answered": 7,
+      "insufficient_evidence": 0,
+      "conflict": 0,
+      "invalid": 0
+    }
+  },
+  "base_model": "qwen2.5:1.5b via Ollama",
+  "base_model_revision": "65ec06548149b04c096a120e4a6da9d4017ea809c91734ea5631e89f96ddc57b",
+  "adapter": null,
+  "training": null
+}

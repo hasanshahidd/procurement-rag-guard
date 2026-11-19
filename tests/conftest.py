@@ -51,7 +51,8 @@ class FakeLLM:
 
 @pytest.fixture
 def settings(tmp_path) -> Settings:
-    return Settings(audit_path=tmp_path / "audit.jsonl", rate_limit_per_min=1000)
+    # BM25 by default keeps the suite deterministic and offline; hybrid has its own tests with a fake embedder.
+    return Settings(audit_path=tmp_path / "audit.jsonl", rate_limit_per_min=1000, retrieval_mode="bm25")
 
 
 @pytest.fixture
@@ -61,9 +62,10 @@ def store(settings) -> Store:
 
 @pytest.fixture
 def make_client(settings) -> Callable[..., TestClient]:
-    def _make(llm: FakeLLM | None = None, **overrides: object) -> TestClient:
+    def _make(llm: FakeLLM | None = None, embedder: object = None, **overrides: object) -> TestClient:
         cfg = Settings(**{**settings.__dict__, **overrides})
-        return TestClient(create_app(cfg, llm=llm or FakeLLM(reply())), raise_server_exceptions=False)
+        app = create_app(cfg, llm=llm or FakeLLM(reply()), embedder=embedder)
+        return TestClient(app, raise_server_exceptions=False)
 
     return _make
 

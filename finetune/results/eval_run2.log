@@ -1,0 +1,115 @@
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  11%|#1        | 33/290 [00:00<00:00, 282.30it/s]Loading weights:  21%|##1       | 62/290 [00:00<00:00, 262.44it/s]Loading weights:  31%|###       | 89/290 [00:00<00:00, 251.80it/s]Loading weights:  40%|###9      | 115/290 [00:00<00:00, 249.39it/s]Loading weights:  49%|####9     | 143/290 [00:00<00:00, 233.79it/s]Loading weights:  59%|#####8    | 171/290 [00:00<00:00, 237.29it/s]Loading weights:  68%|######7   | 196/290 [00:00<00:00, 240.84it/s]Loading weights:  76%|#######6  | 221/290 [00:00<00:00, 240.41it/s]Loading weights:  85%|########4 | 246/290 [00:01<00:00, 239.32it/s]Loading weights:  93%|#########3| 270/290 [00:01<00:00, 237.61it/s]Loading weights: 100%|##########| 290/290 [00:01<00:00, 249.16it/s]
+C:\Users\HP\venvs\prg\Lib\site-packages\transformers\modeling_utils.py:3303: FutureWarning: `is_gradient_checkpointing` is deprecated and will be removed in v6. Use `is_activation_checkpointing` instead.
+  warnings.warn(
+[run2] 1/35 heldout-001 13.3s
+[run2] 2/35 heldout-002 14.4s
+[run2] 3/35 heldout-003 10.3s
+[run2] 4/35 heldout-004 9.4s
+[run2] 5/35 heldout-005 13.2s
+[run2] 6/35 heldout-006 10.0s
+[run2] 7/35 heldout-007 9.1s
+[run2] 8/35 heldout-008 7.0s
+[run2] 9/35 heldout-009 6.3s
+[run2] 10/35 heldout-010 6.7s
+[run2] 11/35 heldout-011 6.8s
+[run2] 12/35 heldout-012 7.6s
+[run2] 13/35 heldout-013 9.0s
+[run2] 14/35 heldout-014 13.6s
+[run2] 15/35 heldout-015 10.4s
+[run2] 16/35 heldout-016 14.3s
+[run2] 17/35 heldout-017 8.4s
+[run2] 18/35 heldout-018 12.5s
+[run2] 19/35 heldout-019 8.8s
+[run2] 20/35 heldout-020 10.0s
+[run2] 21/35 heldout-021 7.4s
+[run2] 22/35 heldout-022 6.3s
+[run2] 23/35 heldout-023 6.7s
+[run2] 24/35 heldout-024 10.1s
+[run2] 25/35 heldout-025 6.4s
+[run2] 26/35 heldout-026 12.5s
+[run2] 27/35 heldout-027 13.0s
+[run2] 28/35 heldout-028 9.7s
+[run2] 29/35 heldout-029 15.7s
+[run2] 30/35 heldout-030 9.7s
+[run2] 31/35 heldout-031 10.0s
+[run2] 32/35 heldout-032 10.6s
+[run2] 33/35 heldout-033 12.5s
+[run2] 34/35 heldout-034 7.5s
+[run2] 35/35 heldout-035 8.4s
+{
+  "name": "run2",
+  "label": "Run 2 (2 epochs, weak classes x2)",
+  "n": 35,
+  "json_valid_rate": 1.0,
+  "status_accuracy": 0.457,
+  "citation_exact_match": 0.429,
+  "citation_precision": 1.0,
+  "citation_recall": 0.286,
+  "citation_f1": 0.444,
+  "injection_n": 7,
+  "injection_resisted_rate": 1.0,
+  "injection_answer_grounded_rate": 0.286,
+  "status_accuracy_by_category": {
+    "answered_single": 0.571,
+    "answered_multi": 0.143,
+    "insufficient_evidence": 1.0,
+    "conflict": 0.286,
+    "injection": 0.286
+  },
+  "status_per_class": {
+    "answered": {
+      "precision": 0.875,
+      "recall": 0.333,
+      "predicted": 8,
+      "gold": 21
+    },
+    "insufficient_evidence": {
+      "precision": 0.28,
+      "recall": 1.0,
+      "predicted": 25,
+      "gold": 7
+    },
+    "conflict": {
+      "precision": 1.0,
+      "recall": 0.286,
+      "predicted": 2,
+      "gold": 7
+    }
+  },
+  "status_confusion": {
+    "answered": {
+      "answered": 7,
+      "insufficient_evidence": 14,
+      "conflict": 0,
+      "invalid": 0
+    },
+    "insufficient_evidence": {
+      "answered": 0,
+      "insufficient_evidence": 7,
+      "conflict": 0,
+      "invalid": 0
+    },
+    "conflict": {
+      "answered": 1,
+      "insufficient_evidence": 4,
+      "conflict": 2,
+      "invalid": 0
+    }
+  },
+  "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "adapter": "finetune/outputs/qwen2.5-0.5b-procurement-lora",
+  "training": {
+    "command": "python -m finetune.train_lora --epochs 2 --lr 2e-4 --grad-accum 2 --threads 4 --oversample insufficient_evidence=2,conflict=2",
+    "epochs": 2,
+    "lr": 0.0002,
+    "grad_accum": 2,
+    "oversample": {
+      "insufficient_evidence": 2,
+      "conflict": 2
+    },
+    "examples_per_epoch": 126,
+    "optimizer_steps": 126,
+    "final_loss": 0.0233,
+    "train_wall_seconds": 3431.5
+  }
+}

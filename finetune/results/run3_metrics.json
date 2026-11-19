@@ -1,0 +1,101 @@
+{
+  "name": "run3",
+  "label": "Run 3 (2 epochs, natural mix)",
+  "n": 35,
+  "json_valid_rate": 1.0,
+  "status_accuracy": 0.6,
+  "citation_exact_match": 0.457,
+  "citation_precision": 0.829,
+  "citation_recall": 0.69,
+  "citation_f1": 0.753,
+  "injection_n": 7,
+  "injection_resisted_rate": 1.0,
+  "injection_answer_grounded_rate": 1.0,
+  "status_accuracy_by_category": {
+    "answered_single": 1.0,
+    "answered_multi": 1.0,
+    "insufficient_evidence": 0.0,
+    "conflict": 0.0,
+    "injection": 1.0
+  },
+  "status_per_class": {
+    "answered": {
+      "precision": 0.6,
+      "recall": 1.0,
+      "predicted": 35,
+      "gold": 21
+    },
+    "insufficient_evidence": {
+      "precision": null,
+      "recall": 0.0,
+      "predicted": 0,
+      "gold": 7
+    },
+    "conflict": {
+      "precision": null,
+      "recall": 0.0,
+      "predicted": 0,
+      "gold": 7
+    }
+  },
+  "status_confusion": {
+    "answered": {
+      "answered": 21,
+      "insufficient_evidence": 0,
+      "conflict": 0,
+      "invalid": 0
+    },
+    "insufficient_evidence": {
+      "answered": 7,
+      "insufficient_evidence": 0,
+      "conflict": 0,
+      "invalid": 0
+    },
+    "conflict": {
+      "answered": 7,
+      "insufficient_evidence": 0,
+      "conflict": 0,
+      "invalid": 0
+    }
+  },
+  "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "base_model_revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+  "adapter": "finetune/outputs/run3_2epochs/qwen2.5-0.5b-procurement-lora",
+  "training": {
+    "command": "python -m finetune.train_lora --epochs 2 --lr 2e-4 --grad-accum 2 --threads 4 --output-dir finetune/outputs/run3_2epochs/qwen2.5-0.5b-procurement-lora",
+    "epochs": 2,
+    "lr": 0.0002,
+    "grad_accum": 2,
+    "oversample": {},
+    "examples_per_epoch": 90,
+    "optimizer_steps": 90,
+    "final_loss": 0.192,
+    "train_wall_seconds": 2505.8
+  },
+  "generation": {
+    "date": "2026-11-19",
+    "command": "python -m finetune.evaluate --adapter finetune/outputs/run3_2epochs/qwen2.5-0.5b-procurement-lora --name run3 --label \"Run 3 (2 epochs, natural mix)\" --threads 4",
+    "heldout": "finetune/data/heldout.jsonl",
+    "heldout_sha256": "e9718bc671ce571174e3ef47544898154b61c084aa3373d6f5788e5946af8acb",
+    "backend": "transformers",
+    "max_new_tokens": 256,
+    "repetition_penalty": 1.1,
+    "torch_threads": 4,
+    "environment": {
+      "python": "3.11.9",
+      "platform": "Windows-10-10.0.26200-SP0",
+      "cpu": "11th Gen Intel(R) Core(TM) i5-1145G7 @ 2.60GHz",
+      "logical_cpus": 8,
+      "gpu": "none (CPU only)",
+      "torch": "2.15.0+cpu",
+      "transformers": "5.23.0",
+      "peft": "0.21.3",
+      "tokenizers": "0.23.3"
+    },
+    "eval_wall_seconds": 754.3
+  },
+  "scored": {
+    "date": "2026-11-19",
+    "command": "python -m finetune.evaluate --adapter finetune/outputs/run3_2epochs/qwen2.5-0.5b-procurement-lora --name run3 --label \"Run 3 (2 epochs, natural mix)\" --threads 4"
+  }
+}

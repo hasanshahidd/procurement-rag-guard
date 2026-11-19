@@ -1,0 +1,116 @@
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  11%|#1        | 33/290 [00:00<00:00, 314.02it/s]Loading weights:  22%|##2       | 65/290 [00:00<00:01, 182.27it/s]Loading weights:  30%|###       | 87/290 [00:00<00:01, 167.36it/s]Loading weights:  37%|###6      | 106/290 [00:00<00:01, 168.83it/s]Loading weights:  45%|####5     | 131/290 [00:00<00:00, 177.71it/s]Loading weights:  52%|#####1    | 150/290 [00:00<00:00, 180.99it/s]Loading weights:  58%|#####8    | 169/290 [00:00<00:00, 167.50it/s]Loading weights:  64%|######4   | 187/290 [00:01<00:00, 170.26it/s]Loading weights:  71%|#######   | 205/290 [00:01<00:00, 152.05it/s]Loading weights:  76%|#######6  | 221/290 [00:01<00:00, 140.68it/s]Loading weights:  82%|########2 | 239/290 [00:01<00:00, 146.87it/s]Loading weights:  88%|########7 | 255/290 [00:01<00:00, 130.99it/s]Loading weights:  94%|#########4| 274/290 [00:01<00:00, 145.31it/s]Loading weights: 100%|##########| 290/290 [00:01<00:00, 162.45it/s]
+C:\Users\HP\venvs\prg\Lib\site-packages\transformers\modeling_utils.py:3303: FutureWarning: `is_gradient_checkpointing` is deprecated and will be removed in v6. Use `is_activation_checkpointing` instead.
+  warnings.warn(
+[selected] 1/35 test-001 23.5s
+[selected] 2/35 test-002 23.5s
+[selected] 3/35 test-003 15.0s
+[selected] 4/35 test-004 18.9s
+[selected] 5/35 test-005 20.4s
+[selected] 6/35 test-006 13.1s
+[selected] 7/35 test-007 13.0s
+[selected] 8/35 test-008 12.7s
+[selected] 9/35 test-009 13.2s
+[selected] 10/35 test-010 16.8s
+[selected] 11/35 test-011 22.5s
+[selected] 12/35 test-012 17.9s
+[selected] 13/35 test-013 16.9s
+[selected] 14/35 test-014 17.6s
+[selected] 15/35 test-015 24.1s
+[selected] 16/35 test-016 17.7s
+[selected] 17/35 test-017 15.0s
+[selected] 18/35 test-018 11.5s
+[selected] 19/35 test-019 12.9s
+[selected] 20/35 test-020 10.5s
+[selected] 21/35 test-021 13.7s
+[selected] 22/35 test-022 28.9s
+[selected] 23/35 test-023 21.0s
+[selected] 24/35 test-024 16.4s
+[selected] 25/35 test-025 22.7s
+[selected] 26/35 test-026 16.0s
+[selected] 27/35 test-027 21.2s
+[selected] 28/35 test-028 11.4s
+[selected] 29/35 test-029 12.0s
+[selected] 30/35 test-030 11.9s
+[selected] 31/35 test-031 17.7s
+[selected] 32/35 test-032 20.6s
+[selected] 33/35 test-033 19.6s
+[selected] 34/35 test-034 17.5s
+[selected] 35/35 test-035 17.0s
+{
+  "name": "selected",
+  "label": "Run 2, selected (2 epochs, weak classes x2)",
+  "n": 35,
+  "json_valid_rate": 1.0,
+  "status_accuracy": 0.4,
+  "citation_exact_match": 0.314,
+  "citation_precision": 1.0,
+  "citation_recall": 0.214,
+  "citation_f1": 0.353,
+  "injection_n": 7,
+  "injection_resisted_rate": 1.0,
+  "injection_answer_grounded_rate": 0.429,
+  "status_accuracy_by_category": {
+    "answered_single": 0.143,
+    "answered_multi": 0.429,
+    "insufficient_evidence": 1.0,
+    "conflict": 0.0,
+    "injection": 0.429
+  },
+  "status_per_class": {
+    "answered": {
+      "precision": 0.778,
+      "recall": 0.333,
+      "predicted": 9,
+      "gold": 21
+    },
+    "insufficient_evidence": {
+      "precision": 0.269,
+      "recall": 1.0,
+      "predicted": 26,
+      "gold": 7
+    },
+    "conflict": {
+      "precision": null,
+      "recall": 0.0,
+      "predicted": 0,
+      "gold": 7
+    }
+  },
+  "status_confusion": {
+    "answered": {
+      "answered": 7,
+      "insufficient_evidence": 14,
+      "conflict": 0,
+      "invalid": 0
+    },
+    "insufficient_evidence": {
+      "answered": 0,
+      "insufficient_evidence": 7,
+      "conflict": 0,
+      "invalid": 0
+    },
+    "conflict": {
+      "answered": 2,
+      "insufficient_evidence": 5,
+      "conflict": 0,
+      "invalid": 0
+    }
+  },
+  "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "base_model_revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+  "adapter": "finetune/outputs/qwen2.5-0.5b-procurement-lora",
+  "training": {
+    "command": "python -m finetune.train_lora --epochs 2 --lr 2e-4 --grad-accum 2 --threads 4 --oversample insufficient_evidence=2,conflict=2",
+    "epochs": 2,
+    "lr": 0.0002,
+    "grad_accum": 2,
+    "oversample": {
+      "insufficient_evidence": 2,
+      "conflict": 2
+    },
+    "examples_per_epoch": 126,
+    "optimizer_steps": 126,
+    "final_loss": 0.0233,
+    "train_wall_seconds": 3431.5
+  }
+}

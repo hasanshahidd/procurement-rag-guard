@@ -35,6 +35,7 @@ def _vendor_quote(store: Store, principal: Principal, sku: str) -> list[Document
             text=q["text"],
             updated_at=q["issued_at"],
             sensitivity="restricted",
+            origin="tool",
         )
         for q in store.quotes_for(principal, sku)
     ]

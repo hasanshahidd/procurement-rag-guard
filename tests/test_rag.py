@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import threading
 
-from app.pipeline import _replacements
+from app.pipeline import NO_EVIDENCE, _replacements
 from app.retrieval import search, tokenize
 from app.schemas import SourceNote
 from app.store import Document
@@ -165,6 +165,12 @@ def test_conflict_reported_by_model_is_kept(make_client):
     assert body["answer"] == text
 
 
+def test_model_conflict_label_needs_two_supporting_sources(make_client):
+    llm = FakeLLM(reply("conflict", "PR-1042 is pending approval.", ["TCK-H-101"]))
+    body = ask(make_client(llm), "What is the status of PR-1042?", HARBOR_BUYER).json()
+    assert body["status"] == "answered"
+
+
 def test_no_relevant_sources_abstains_without_calling_model(make_client):
     llm = FakeLLM(reply("answered", "Team A.", ["KB-001"]))
     body = ask(make_client(llm), "Who won the football final last night?", HARBOR_BUYER).json()
@@ -178,6 +184,7 @@ def test_model_insufficient_evidence_becomes_abstention(make_client):
     body = ask(make_client(llm), "What is the warranty period for TAB-10-RUG?", HARBOR_BUYER).json()
     assert body["status"] == "abstained"
     assert body["reason"] == "model_reported_insufficient_evidence"
+    assert body["answer"] == NO_EVIDENCE  # the model's own wording would be an uncited claim
     assert body["citations"] == []
     assert body["retrieved"]
 

@@ -1,5 +1,6 @@
 {
-  "label": "Baseline (Qwen2.5-0.5B-Instruct, no adapter)",
+  "name": "baseline",
+  "label": "Baseline (no adapter)",
   "n": 35,
   "json_valid_rate": 0.914,
   "status_accuracy": 0.543,
@@ -9,6 +10,7 @@
   "citation_f1": 0.0,
   "injection_n": 7,
   "injection_resisted_rate": 1.0,
+  "injection_answer_grounded_rate": 0.0,
   "status_accuracy_by_category": {
     "answered_single": 1.0,
     "answered_multi": 0.714,
@@ -16,25 +18,72 @@
     "conflict": 0.0,
     "injection": 1.0
   },
-  "eval_wall_seconds": 1137.8,
-  "date": "2026-11-19",
-  "command": "python -m finetune.evaluate --threads 4",
-  "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
-  "heldout": "finetune/data/heldout.jsonl",
-  "heldout_sha256": "e9718bc671ce571174e3ef47544898154b61c084aa3373d6f5788e5946af8acb",
-  "max_new_tokens": 256,
-  "torch_threads": 4,
-  "environment": {
-    "python": "3.11.9",
-    "platform": "Windows-10-10.0.26200-SP0",
-    "cpu": "11th Gen Intel(R) Core(TM) i5-1145G7 @ 2.60GHz",
-    "logical_cpus": 8,
-    "gpu": "none (CPU only)",
-    "torch": "2.15.0+cpu",
-    "transformers": "5.23.0",
-    "peft": "0.21.3",
-    "tokenizers": "0.23.3"
+  "status_per_class": {
+    "answered": {
+      "precision": 0.613,
+      "recall": 0.905,
+      "predicted": 31,
+      "gold": 21
+    },
+    "insufficient_evidence": {
+      "precision": null,
+      "recall": 0.0,
+      "predicted": 0,
+      "gold": 7
+    },
+    "conflict": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "predicted": 1,
+      "gold": 7
+    }
   },
-  "repetition_penalty": 1.1,
-  "adapter": null
+  "status_confusion": {
+    "answered": {
+      "answered": 19,
+      "insufficient_evidence": 0,
+      "conflict": 0,
+      "invalid": 2
+    },
+    "insufficient_evidence": {
+      "answered": 5,
+      "insufficient_evidence": 0,
+      "conflict": 1,
+      "invalid": 1
+    },
+    "conflict": {
+      "answered": 7,
+      "insufficient_evidence": 0,
+      "conflict": 0,
+      "invalid": 0
+    }
+  },
+  "adapter": null,
+  "training": null,
+  "generation": {
+    "date": "2026-11-19",
+    "command": "python -m finetune.evaluate --threads 4",
+    "heldout": "finetune/data/heldout.jsonl",
+    "heldout_sha256": "e9718bc671ce571174e3ef47544898154b61c084aa3373d6f5788e5946af8acb",
+    "max_new_tokens": 256,
+    "repetition_penalty": 1.1,
+    "torch_threads": 4,
+    "environment": {
+      "python": "3.11.9",
+      "platform": "Windows-10-10.0.26200-SP0",
+      "cpu": "11th Gen Intel(R) Core(TM) i5-1145G7 @ 2.60GHz",
+      "logical_cpus": 8,
+      "gpu": "none (CPU only)",
+      "torch": "2.15.0+cpu",
+      "transformers": "5.23.0",
+      "peft": "0.21.3",
+      "tokenizers": "0.23.3"
+    },
+    "eval_wall_seconds": 1137.8,
+    "rescored_from": "finetune/results/run1_1epoch/predictions_baseline.jsonl"
+  },
+  "scored": {
+    "date": "2026-11-19",
+    "command": "python -m finetune.evaluate --rescore finetune/results/run1_1epoch/predictions_baseline.jsonl --adapter none --name baseline --label \"Baseline (no adapter)\""
+  }
 }

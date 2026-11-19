@@ -1,0 +1,325 @@
+{
+  "finished_utc": "2026-11-19T09:41:08+00:00",
+  "command": "python -m finetune.train_lora --epochs 1 --lr 3e-4 --grad-accum 2 --threads 4",
+  "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "environment": {
+    "python": "3.11.9",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "cpu": "11th Gen Intel(R) Core(TM) i5-1145G7 @ 2.60GHz",
+    "logical_cpus": 8,
+    "gpu": "none (CPU only)",
+    "torch": "2.15.0+cpu",
+    "transformers": "5.23.0",
+    "peft": "0.21.3",
+    "tokenizers": "0.23.3",
+    "torch_threads": 4
+  },
+  "hyperparameters": {
+    "train": "finetune/data/train.jsonl",
+    "output_dir": "finetune/outputs/qwen2.5-0.5b-procurement-lora",
+    "epochs": 1,
+    "lr": 0.0003,
+    "max_len": 1024,
+    "limit": 0,
+    "grad_accum": 2,
+    "rank": 8,
+    "alpha": 16,
+    "dropout": 0.05,
+    "seed": 13,
+    "threads": 4
+  },
+  "lora_target_modules": [
+    "q_proj",
+    "k_proj",
+    "v_proj",
+    "o_proj"
+  ],
+  "trainable_params": 1081344,
+  "dataset": {
+    "path": "finetune/data/train.jsonl",
+    "sha256": "fbd4092a9e20dd2de9d34d0978460e5ce9140bbed3bce13fdf7125e590d6e6ed",
+    "rows_used": 90
+  },
+  "examples_trained": 90,
+  "skipped_too_long": [],
+  "longest_example_tokens": 592,
+  "optimizer_steps": 45,
+  "final_loss": 0.1951,
+  "train_wall_seconds": 1637.0,
+  "loss_log": [
+    {
+      "step": 1,
+      "epoch": 1,
+      "loss": 0.7348,
+      "seconds": 101.77
+    },
+    {
+      "step": 2,
+      "epoch": 1,
+      "loss": 1.139,
+      "seconds": 47.1
+    },
+    {
+      "step": 3,
+      "epoch": 1,
+      "loss": 0.9094,
+      "seconds": 23.17
+    },
+    {
+      "step": 4,
+      "epoch": 1,
+      "loss": 0.3525,
+      "seconds": 15.24
+    },
+    {
+      "step": 5,
+      "epoch": 1,
+      "loss": 0.946,
+      "seconds": 21.03
+    },
+    {
+      "step": 6,
+      "epoch": 1,
+      "loss": 0.7323,
+      "seconds": 24.37
+    },
+    {
+      "step": 7,
+      "epoch": 1,
+      "loss": 0.7898,
+      "seconds": 27.57
+    },
+    {
+      "step": 8,
+      "epoch": 1,
+      "loss": 0.4239,
+      "seconds": 44.82
+    },
+    {
+      "step": 9,
+      "epoch": 1,
+      "loss": 0.5784,
+      "seconds": 23.53
+    },
+    {
+      "step": 10,
+      "epoch": 1,
+      "loss": 0.6453,
+      "seconds": 74.81
+    },
+    {
+      "step": 11,
+      "epoch": 1,
+      "loss": 0.6605,
+      "seconds": 42.22
+    },
+    {
+      "step": 12,
+      "epoch": 1,
+      "loss": 1.0464,
+      "seconds": 28.28
+    },
+    {
+      "step": 13,
+      "epoch": 1,
+      "loss": 0.5624,
+      "seconds": 31.68
+    },
+    {
+      "step": 14,
+      "epoch": 1,
+      "loss": 0.7499,
+      "seconds": 33.5
+    },
+    {
+      "step": 15,
+      "epoch": 1,
+      "loss": 0.7934,
+      "seconds": 34.97
+    },
+    {
+      "step": 16,
+      "epoch": 1,
+      "loss": 0.3877,
+      "seconds": 38.56
+    },
+    {
+      "step": 17,
+      "epoch": 1,
+      "loss": 0.6477,
+      "seconds": 34.65
+    },
+    {
+      "step": 18,
+      "epoch": 1,
+      "loss": 0.4412,
+      "seconds": 104.12
+    },
+    {
+      "step": 19,
+      "epoch": 1,
+      "loss": 0.4862,
+      "seconds": 37.66
+    },
+    {
+      "step": 20,
+      "epoch": 1,
+      "loss": 0.3463,
+      "seconds": 55.47
+    },
+    {
+      "step": 21,
+      "epoch": 1,
+      "loss": 0.4803,
+      "seconds": 74.35
+    },
+    {
+      "step": 22,
+      "epoch": 1,
+      "loss": 0.2235,
+      "seconds": 81.26
+    },
+    {
+      "step": 23,
+      "epoch": 1,
+      "loss": 0.2408,
+      "seconds": 21.3
+    },
+    {
+      "step": 24,
+      "epoch": 1,
+      "loss": 0.3889,
+      "seconds": 85.51
+    },
+    {
+      "step": 25,
+      "epoch": 1,
+      "loss": 0.3951,
+      "seconds": 55.63
+    },
+    {
+      "step": 26,
+      "epoch": 1,
+      "loss": 0.3704,
+      "seconds": 20.48
+    },
+    {
+      "step": 27,
+      "epoch": 1,
+      "loss": 0.6793,
+      "seconds": 35.18
+    },
+    {
+      "step": 28,
+      "epoch": 1,
+      "loss": 0.4428,
+      "seconds": 32.3
+    },
+    {
+      "step": 29,
+      "epoch": 1,
+      "loss": 0.4621,
+      "seconds": 21.84
+    },
+    {
+      "step": 30,
+      "epoch": 1,
+      "loss": 0.3238,
+      "seconds": 25.5
+    },
+    {
+      "step": 31,
+      "epoch": 1,
+      "loss": 0.3309,
+      "seconds": 14.29
+    },
+    {
+      "step": 32,
+      "epoch": 1,
+      "loss": 0.4667,
+      "seconds": 13.57
+    },
+    {
+      "step": 33,
+      "epoch": 1,
+      "loss": 0.4473,
+      "seconds": 14.71
+    },
+    {
+      "step": 34,
+      "epoch": 1,
+      "loss": 0.5218,
+      "seconds": 26.74
+    },
+    {
+      "step": 35,
+      "epoch": 1,
+      "loss": 0.3234,
+      "seconds": 30.03
+    },
+    {
+      "step": 36,
+      "epoch": 1,
+      "loss": 0.1509,
+      "seconds": 27.28
+    },
+    {
+      "step": 37,
+      "epoch": 1,
+      "loss": 0.3072,
+      "seconds": 23.85
+    },
+    {
+      "step": 38,
+      "epoch": 1,
+      "loss": 0.4634,
+      "seconds": 13.28
+    },
+    {
+      "step": 39,
+      "epoch": 1,
+      "loss": 0.3816,
+      "seconds": 23.12
+    },
+    {
+      "step": 40,
+      "epoch": 1,
+      "loss": 0.183,
+      "seconds": 26.36
+    },
+    {
+      "step": 41,
+      "epoch": 1,
+      "loss": 0.208,
+      "seconds": 29.32
+    },
+    {
+      "step": 42,
+      "epoch": 1,
+      "loss": 0.3215,
+      "seconds": 22.33
+    },
+    {
+      "step": 43,
+      "epoch": 1,
+      "loss": 0.4966,
+      "seconds": 23.7
+    },
+    {
+      "step": 44,
+      "epoch": 1,
+      "loss": 0.3263,
+      "seconds": 22.85
+    },
+    {
+      "step": 45,
+      "epoch": 1,
+      "loss": 0.1951,
+      "seconds": 27.61
+    }
+  ],
+  "relocated_to": "finetune/outputs/run1_1epoch/qwen2.5-0.5b-procurement-lora",
+  "relocation_note": "Written to output_dir during run 1, moved here when run 2 took the standard path. Contents unchanged.",
+  "base_model_revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+  "base_model_revision_note": "Added after the run, when the revision was pinned in finetune/common.py. The local Hugging Face cache has only ever held this one snapshot of the base model, so this is the revision the run loaded."
+}

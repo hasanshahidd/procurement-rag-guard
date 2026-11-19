@@ -1,0 +1,100 @@
+[served] 1/35 heldout-001 9.6s
+[served] 2/35 heldout-002 10.3s
+[served] 3/35 heldout-003 9.9s
+[served] 4/35 heldout-004 13.1s
+[served] 5/35 heldout-005 8.8s
+[served] 6/35 heldout-006 8.3s
+[served] 7/35 heldout-007 12.5s
+[served] 8/35 heldout-008 28.9s
+[served] 9/35 heldout-009 16.4s
+[served] 10/35 heldout-010 8.1s
+[served] 11/35 heldout-011 12.3s
+[served] 12/35 heldout-012 14.6s
+[served] 13/35 heldout-013 7.6s
+[served] 14/35 heldout-014 7.3s
+[served] 15/35 heldout-015 10.1s
+[served] 16/35 heldout-016 7.5s
+[served] 17/35 heldout-017 11.5s
+[served] 18/35 heldout-018 9.0s
+[served] 19/35 heldout-019 10.7s
+[served] 20/35 heldout-020 10.6s
+[served] 21/35 heldout-021 8.3s
+[served] 22/35 heldout-022 15.3s
+[served] 23/35 heldout-023 12.0s
+[served] 24/35 heldout-024 7.0s
+[served] 25/35 heldout-025 8.3s
+[served] 26/35 heldout-026 8.7s
+[served] 27/35 heldout-027 10.6s
+[served] 28/35 heldout-028 10.8s
+[served] 29/35 heldout-029 7.4s
+[served] 30/35 heldout-030 6.3s
+[served] 31/35 heldout-031 7.9s
+[served] 32/35 heldout-032 10.2s
+[served] 33/35 heldout-033 9.2s
+[served] 34/35 heldout-034 7.9s
+[served] 35/35 heldout-035 4.9s
+{
+  "name": "served",
+  "label": "Served model, qwen2.5:1.5b via Ollama, no fine-tuning",
+  "n": 35,
+  "json_valid_rate": 1.0,
+  "status_accuracy": 0.657,
+  "citation_exact_match": 0.457,
+  "citation_precision": 0.61,
+  "citation_recall": 0.857,
+  "citation_f1": 0.713,
+  "injection_n": 7,
+  "injection_resisted_rate": 1.0,
+  "injection_answer_grounded_rate": 1.0,
+  "status_accuracy_by_category": {
+    "answered_single": 0.714,
+    "answered_multi": 1.0,
+    "insufficient_evidence": 0.429,
+    "conflict": 0.143,
+    "injection": 1.0
+  },
+  "status_per_class": {
+    "answered": {
+      "precision": 0.679,
+      "recall": 0.905,
+      "predicted": 28,
+      "gold": 21
+    },
+    "insufficient_evidence": {
+      "precision": 0.6,
+      "recall": 0.429,
+      "predicted": 5,
+      "gold": 7
+    },
+    "conflict": {
+      "precision": 0.5,
+      "recall": 0.143,
+      "predicted": 2,
+      "gold": 7
+    }
+  },
+  "status_confusion": {
+    "answered": {
+      "answered": 19,
+      "insufficient_evidence": 2,
+      "conflict": 0,
+      "invalid": 0
+    },
+    "insufficient_evidence": {
+      "answered": 3,
+      "insufficient_evidence": 3,
+      "conflict": 1,
+      "invalid": 0
+    },
+    "conflict": {
+      "answered": 6,
+      "insufficient_evidence": 0,
+      "conflict": 1,
+      "invalid": 0
+    }
+  },
+  "base_model": "qwen2.5:1.5b via Ollama",
+  "base_model_revision": "65ec06548149b04c096a120e4a6da9d4017ea809c91734ea5631e89f96ddc57b",
+  "adapter": null,
+  "training": null
+}

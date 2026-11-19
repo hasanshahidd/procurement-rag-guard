@@ -31,10 +31,11 @@ class LLM(Protocol):
 
 
 class OllamaLLM:
-    def __init__(self, base_url: str, model: str, timeout_s: float):
+    def __init__(self, base_url: str, model: str, timeout_s: float, options: dict | None = None):
         self.name = f"ollama:{model}"
         self._model = model
         self._client = httpx.Client(base_url=base_url, timeout=timeout_s)
+        self._options = options or {}  # overrides, for example sampling in the reproduction script
 
     def chat(self, messages: list[dict[str, str]]) -> str:
         payload = {
@@ -42,7 +43,9 @@ class OllamaLLM:
             "messages": messages,
             "stream": False,
             "format": "json",
-            "options": {"temperature": 0, "seed": 7, "num_predict": 400},
+            # num_ctx: Ollama's small default context would silently cut the start of the prompt,
+            # which is the system prompt. 8192 tokens covers 8 sources at the prompt budget.
+            "options": {"temperature": 0, "seed": 7, "num_predict": 400, "num_ctx": 8192, **self._options},
         }
         try:
             resp = self._client.post("/api/chat", json=payload)
@@ -52,7 +55,10 @@ class OllamaLLM:
             raise LLMUnavailableError(f"Model '{self._model}' is not pulled. Run: ollama pull {self._model}")
         if resp.status_code != 200:
             raise LLMUnavailableError(f"Ollama returned HTTP {resp.status_code}")
-        return resp.json().get("message", {}).get("content", "")
+        try:
+            return resp.json().get("message", {}).get("content", "")
+        except ValueError as exc:
+            raise LLMUnavailableError("Ollama returned a body that is not JSON") from exc
 
     def health(self) -> dict:
         try:
@@ -102,7 +108,16 @@ class TransformersLLM:
         return self._tok.decode(out[0, enc["input_ids"].shape[1] :], skip_special_tokens=True)
 
     def health(self) -> dict:
-        return {"reachable": True, "detail": "loaded" if self._model is not None else "loads on first request"}
+        if self._model is not None:
+            return {"reachable": True, "detail": "loaded"}
+        import importlib.util
+
+        missing = [m for m in ("torch", "transformers") if importlib.util.find_spec(m) is None]
+        if self._adapter and importlib.util.find_spec("peft") is None:
+            missing.append("peft")
+        if missing:
+            return {"reachable": False, "detail": f"missing packages: {', '.join(missing)}"}
+        return {"reachable": True, "detail": "loads on first request"}
 
 
 def build_llm(settings: Settings) -> LLM:

@@ -28,6 +28,7 @@ SYSTEM_PROMPT = (
 )
 
 _DELIMITER = re.compile(r"\[\s*(/?\s*SOURCE|END\s+SOURCE)", re.I)
+MAX_SOURCE_CHARS = 3000
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,8 @@ class ModelOutput:
 def render_source(src: ContextSource) -> str:
     # Source text cannot open or close a source block of its own.
     body = _DELIMITER.sub(lambda m: "(" + m.group(1), src.text)
+    if len(body) > MAX_SOURCE_CHARS:  # prompt budget: 8 sources stay well inside an 8192 token context
+        body = body[:MAX_SOURCE_CHARS] + " [truncated]"
     return f"[SOURCE id={src.id} kind={src.kind} updated={src.updated} trust=untrusted]\n{body}\n[END SOURCE {src.id}]"
 
 

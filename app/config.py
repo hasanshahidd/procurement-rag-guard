@@ -20,6 +20,10 @@ class Settings:
     lora_adapter: str | None = None
     llm_timeout_s: float = 120.0
     min_retrieval_score: float = 1.0
+    retrieval_mode: str = "hybrid"  # hybrid | bm25
+    embed_model: str = "nomic-embed-text"
+    min_dense_score: float = 0.6  # measured: on-topic questions 0.70 to 0.80, off-topic at most 0.51
+    db_path: Path | None = None
     rate_limit_per_min: int = 60
 
     @classmethod
@@ -35,5 +39,9 @@ class Settings:
             lora_adapter=env("LORA_ADAPTER") or None,
             llm_timeout_s=float(env("LLM_TIMEOUT_S", cls.llm_timeout_s)),
             min_retrieval_score=float(env("MIN_RETRIEVAL_SCORE", cls.min_retrieval_score)),
+            retrieval_mode=env("RETRIEVAL_MODE", cls.retrieval_mode).lower(),
+            embed_model=env("EMBED_MODEL", cls.embed_model),
+            min_dense_score=float(env("MIN_DENSE_SCORE", cls.min_dense_score)),
+            db_path=Path(env("DB_PATH")) if env("DB_PATH") else None,
             rate_limit_per_min=int(env("RATE_LIMIT_PER_MIN", cls.rate_limit_per_min)),
         )

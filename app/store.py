@@ -1,4 +1,4 @@
-"""In-memory document store with tenant and role based visibility.
+"""Document store with tenant and role based visibility.
 
 Access control lives here, in code. The model only ever receives documents
 returned by Store.visible_docs, so a prompt cannot widen what it sees.
@@ -12,6 +12,7 @@ import hashlib
 import hmac
 import json
 import re
+import sqlite3
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -58,6 +59,7 @@ class Document:
     sensitivity: str
     supersedes: tuple[str, ...] = ()
     facts: tuple[tuple[str, str], ...] = ()
+    origin: str = "seed"  # seed | api | tool
     scan: ScanResult = field(default=None, compare=False)  # type: ignore[assignment]
     content_sha256: str = ""
 
@@ -66,29 +68,75 @@ class Document:
         text = str(kw["text"])
         kw["supersedes"] = tuple(kw.get("supersedes") or ())  # type: ignore[arg-type]
         kw["facts"] = tuple(sorted(dict(kw.get("facts") or {}).items()))  # type: ignore[arg-type]
-        return cls(**kw, scan=scan(text), content_sha256=sha256(text))  # type: ignore[arg-type]
+        result = scan(text, status_claims=kw.get("origin") == "api")
+        return cls(**kw, scan=result, content_sha256=sha256(text))  # type: ignore[arg-type]
+
+    def payload(self) -> dict:
+        data = {f: getattr(self, f) for f in _PERSISTED_FIELDS}
+        return {**data, "supersedes": list(self.supersedes), "facts": dict(self.facts)}
 
 
 class DuplicateDocumentError(Exception):
     pass
 
 
+_PERSISTED_FIELDS = (
+    "id", "tenant_id", "kind", "title", "text", "updated_at", "sensitivity", "supersedes", "facts", "origin"
+)  # fmt: skip
+
+
+def _open_db(path: Path) -> sqlite3.Connection:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    db = sqlite3.connect(path, check_same_thread=False)  # access is serialised by Store._lock
+    for table in ("documents", "tool_outputs"):
+        db.execute(
+            f"CREATE TABLE IF NOT EXISTS {table} ("
+            " tenant_id TEXT NOT NULL, id TEXT NOT NULL, payload TEXT NOT NULL,"
+            " PRIMARY KEY (tenant_id, id))"
+        )
+    return db
+
+
 class Store:
-    def __init__(self, documents: list[Document], principals: dict[str, Principal], quotes: list[dict]):
+    """Seed records come from JSON files. Ingested records go to SQLite when a db_path is set."""
+
+    def __init__(
+        self,
+        documents: list[Document],
+        principals: dict[str, Principal],
+        quotes: list[dict],
+        db_path: Path | None = None,
+    ):
         self._docs: dict[tuple[str, str], Document] = {(d.tenant_id, d.id): d for d in documents}
         self._tool_outputs: dict[tuple[str, str], Document] = {}  # for citation lookup, never indexed
         self._principals = principals
         self._quotes = quotes
         self._lock = threading.Lock()
+        self._db = _open_db(db_path) if db_path else None
+        if self._db is not None:
+            for table, target in (("documents", self._docs), ("tool_outputs", self._tool_outputs)):
+                for (payload,) in self._db.execute(f"SELECT payload FROM {table}"):  # noqa: S608 - fixed table names
+                    doc = Document.build(**json.loads(payload))
+                    target[(doc.tenant_id, doc.id)] = doc
+
+    def _persist(self, table: str, doc: Document, replace: bool = False) -> None:
+        if self._db is None:
+            return
+        verb = "INSERT OR REPLACE" if replace else "INSERT"
+        with self._db:
+            self._db.execute(
+                f"{verb} INTO {table} (tenant_id, id, payload) VALUES (?, ?, ?)",
+                (doc.tenant_id, doc.id, json.dumps(doc.payload())),
+            )
 
     @classmethod
-    def from_dir(cls, data_dir: Path) -> Store:
+    def from_dir(cls, data_dir: Path, db_path: Path | None = None) -> Store:
         def load(name: str) -> list[dict]:
             return json.loads((data_dir / name).read_text(encoding="utf-8"))
 
         docs = [Document.build(**d) for d in load("documents.json")]
         principals = {p["api_key"]: Principal(p["tenant_id"], p["role"], p["label"]) for p in load("principals.json")}
-        return cls(docs, principals, load("vendor_quotes.json"))
+        return cls(docs, principals, load("vendor_quotes.json"), db_path)
 
     def __len__(self) -> int:
         return len(self._docs)
@@ -125,11 +173,14 @@ class Store:
             # Ids must be unique within what this tenant can see, so citations stay unambiguous.
             if (doc.tenant_id, doc.id) in self._docs or (SHARED_TENANT, doc.id) in self._docs:
                 raise DuplicateDocumentError(doc.id)
+            self._persist("documents", doc)  # write first, so a failed write never leaves a record only in memory
             self._docs[(doc.tenant_id, doc.id)] = doc
         return doc
 
     def remember_tool_output(self, doc: Document) -> None:
+        """Keep tool results so their citations can be checked later, including after a restart."""
         with self._lock:
+            self._persist("tool_outputs", doc, replace=True)
             self._tool_outputs[(doc.tenant_id, doc.id)] = doc
 
     def quotes_for(self, principal: Principal, sku: str) -> list[dict]:
@@ -140,6 +191,10 @@ class Store:
 
     def hidden_amounts(self, principal: Principal) -> set[str]:
         """Numbers that appear only in records this principal may not see.
+
+        Used only by the reproduction script to measure what the naive pipeline
+        leaked. The API's verifier uses an allowlist instead (checks.py), so its
+        decisions never depend on other tenants' data.
 
         Numbers that also appear somewhere the caller can see (years, common
         quantities) are left out, so they do not cause false blocks.

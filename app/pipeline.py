@@ -20,12 +20,13 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 
 from app.audit import AuditLog
-from app.checks import describe_extra_field, numbers_in, run_output_checks
+from app.checks import MIN_SUPPORT, describe_extra_field, numbers_in, run_output_checks, support_score
 from app.config import Settings
-from app.guard import scan, sentence_spans
+from app.embeddings import Embedder
+from app.guard import sentence_spans
 from app.llm import LLM
 from app.prompting import ContextSource, ModelOutput, build_messages, parse_model_output
-from app.retrieval import search, tokenize
+from app.retrieval import Hit, hybrid_search, search, tokenize
 from app.schemas import (
     AgentStep,
     AskResponse,
@@ -38,7 +39,7 @@ from app.schemas import (
     SecurityReport,
     SourceNote,
 )
-from app.store import Document, Principal, Store
+from app.store import Document, Principal, Store, sha256
 from app.tools import run_tool
 
 _SKU = re.compile(r"\b[A-Z]{3}-\d{2}-[A-Z]{3}\b", re.I)
@@ -66,36 +67,44 @@ class _Run:
     security: SecurityReport = field(default_factory=SecurityReport)
     excluded: list[SourceNote] = field(default_factory=list)
     retrieved: list[RetrievedSource] = field(default_factory=list)
+    raw_sha256: str | None = None  # hash of the raw model reply, so a blocked reply is traceable without storing it
 
     def step(self, agent: str, summary: str) -> None:
         self.steps.append(AgentStep(agent=agent, summary=summary))
 
 
 class Pipeline:
-    def __init__(self, store: Store, llm: LLM, settings: Settings, audit: AuditLog):
+    def __init__(self, store: Store, llm: LLM, settings: Settings, audit: AuditLog, embedder: Embedder | None = None):
         self.store, self.llm, self.settings, self.audit = store, llm, settings, audit
+        self.embedder = embedder
+
+    def _rank(self, visible: list[Document], question: str, k: int) -> tuple[list[Hit], str]:
+        s = self.settings
+        if s.retrieval_mode == "hybrid" and self.embedder is not None:
+            return hybrid_search(visible, question, k, self.embedder, s.min_retrieval_score, s.min_dense_score)
+        return [h for h in search(visible, question, k) if h.score >= s.min_retrieval_score], "BM25"
 
     # agents ---------------------------------------------------------------
 
     def _retrieve(self, run: _Run, principal: Principal, question: str, top_k: int) -> list[Document]:
         visible = self.store.visible_docs(principal)
         superseded_by = {old: d.id for d in visible for old in d.supersedes}
-        hits = search(visible, question, top_k + len(superseded_by))
+        hits, mode = self._rank(visible, question, top_k + len(superseded_by))
         context: list[Document] = []
         for hit in hits:
-            if hit.score < self.settings.min_retrieval_score:
-                continue
             if hit.doc.id in superseded_by:
                 run.excluded.append(
                     SourceNote(source_id=hit.doc.id, reason=f"superseded by {superseded_by[hit.doc.id]}")
                 )
             elif len(context) < top_k:
                 context.append(hit.doc)
-                run.retrieved.append(RetrievedSource(source_id=hit.doc.id, score=hit.score))
+                run.retrieved.append(
+                    RetrievedSource(source_id=hit.doc.id, score=hit.score, bm25=hit.bm25, dense=hit.dense)
+                )
         for newer in _replacements(run.excluded, superseded_by, visible, context):
             context.append(newer)  # an outdated hit pulls in the record that replaced it
             run.retrieved.append(RetrievedSource(source_id=newer.id, score=0.0))
-        run.step("retriever", f"{len(visible)} visible records, kept {[d.id for d in context]}")
+        run.step("retriever", f"{mode} over {len(visible)} visible records, kept {[d.id for d in context]}")
         return context
 
     def _run_tools(self, run: _Run, principal: Principal, question: str) -> list[Document]:
@@ -120,6 +129,7 @@ class Pipeline:
     def _answer(self, run: _Run, question: str, sources: list[ContextSource]) -> ModelOutput | None:
         started = time.perf_counter()
         raw = self.llm.chat(build_messages(question, sources))
+        run.raw_sha256 = sha256(raw)
         parsed = parse_model_output(raw)
         took = time.perf_counter() - started
         run.step("answerer", f"{self.llm.name} replied in {took:.1f}s, contract {'ok' if parsed else 'violated'}")
@@ -151,14 +161,8 @@ class Pipeline:
             run.security.blocked_actions.append(
                 BlockedAction(origin="model_output", detail=describe_extra_field(key, value))
             )
-        cited = [by_id[c] for c in out.citations if c in by_id]
-        for c in out.citations:
-            if c not in by_id:
-                shown = c if _DOC_ID.match(c) else "<not a source id>"  # never echo free text from the model
-                run.security.rejected_citations.append(
-                    SourceNote(source_id=shown, reason="not among the sources provided for this request")
-                )
-        failures = self._output_checks(principal, question, out.answer, context)
+        cited = self._check_citations(run, out, by_id)
+        failures = self._output_checks(question, out.answer, context)
         run.security.output_checks.extend(failures)
         conflicts = find_conflicts(question, context)
         run.step(
@@ -169,12 +173,13 @@ class Pipeline:
         if conflicts:
             return self._conflict(run, principal, question, out, cited, conflicts, by_id)
         if out.status == "insufficient_evidence":
-            # No citations on an abstention: they would read as support for a claim. `retrieved` lists what was read.
+            # Fixed text and no citations: free text here would be an uncited claim. `retrieved` lists what was read.
             reason = "model_reported_insufficient_evidence"
-            return self._finish(run, principal, question, "abstained", reason, out.answer or NO_EVIDENCE, [])
+            return self._finish(run, principal, question, "abstained", reason, NO_EVIDENCE, [])
         if not cited:
             return self._finish(run, principal, question, "abstained", "no_valid_citations", NO_EVIDENCE, [])
-        status = "conflict" if out.status == "conflict" else "answered"
+        # A conflict needs two sides: the model's label is kept only with two supporting citations.
+        status = "conflict" if out.status == "conflict" and len(cited) >= 2 else "answered"
         return self._finish(run, principal, question, status, None, out.answer, cited)
 
     def _conflict(
@@ -195,16 +200,34 @@ class Pipeline:
             answer, reason = describe_conflicts(conflicts), "model_missed_conflict"
         return self._finish(run, principal, question, "conflict", reason, answer, docs, conflicts)
 
-    def _output_checks(self, principal: Principal, question: str, answer: str, context: list[Document]) -> list[str]:
-        # Only what the model was actually shown counts as allowed, not text the guard removed.
-        allowed = numbers_in(question) | {n for d in context for n in numbers_in(d.scan.clean_text)}
+    def _check_citations(self, run: _Run, out: ModelOutput, by_id: dict[str, Document]) -> list[Document]:
+        """Keep citations that were in this request's context and whose text supports the answer."""
+        kept: list[Document] = []
+        for cid in out.citations:
+            doc = by_id.get(cid)
+            if doc is None:
+                shown = cid if _DOC_ID.match(cid) else "<not a source id>"  # never echo free text from the model
+                reason = "not among the sources provided for this request"
+            elif make_citation(doc, out.answer) is None:
+                shown, reason = cid, "cited source does not support the answer"
+            else:
+                kept.append(doc)
+                continue
+            run.security.rejected_citations.append(SourceNote(source_id=shown, reason=reason))
+        return kept
+
+    def _output_checks(self, question: str, answer: str, context: list[Document]) -> list[str]:
+        # Allowlist: only numbers the model was actually shown (source header and the text the guard kept)
+        # or the user typed. Text the guard removed does not count.
+        shown = " ".join(f"{d.id} {d.updated_at} {d.scan.clean_text}" for d in context)
+        allowed = numbers_in(question) | numbers_in(shown)
         approved = {
             key.split(":", 1)[1].upper()
             for d in context
             for key, value in d.facts
             if key.startswith("pr_status:") and value == "approved"
         }
-        return run_output_checks(answer, self.store.hidden_amounts(principal), allowed, approved)
+        return run_output_checks(answer, allowed, approved)
 
     def _finish(
         self,
@@ -217,7 +240,7 @@ class Pipeline:
         docs: list[Document],
         conflicts: list[Conflict] | None = None,
     ) -> AskResponse:
-        citations = [c for c in (make_citation(d, f"{question} {answer}") for d in docs) if c]
+        citations = [c for c in (make_citation(d, answer) for d in docs) if c]
         response = AskResponse(
             trace_id=run.trace_id,
             status=status,
@@ -231,7 +254,7 @@ class Pipeline:
             agents=run.steps,
             model=self.llm.name,
         )
-        self.audit.write(principal, question, response)
+        self.audit.write(principal, question, response, model_output_sha256=run.raw_sha256)
         return response
 
 
@@ -274,22 +297,26 @@ def describe_conflicts(conflicts: list[Conflict]) -> str:
     )
 
 
-def make_citation(doc: Document, focus: str) -> Citation | None:
-    """Pick the unflagged sentence of the stored text that best matches the answer.
+def make_citation(doc: Document, answer: str) -> Citation | None:
+    """Pick the sentence of the stored text that best supports the answer, or None if none does.
 
-    The excerpt is a verbatim slice of doc.text, so anyone can check it with
-    text[start:end] and the content hash.
+    Sentences the guard removed are never cited. A sentence must share at least
+    MIN_SUPPORT with the answer (an id or number, or two words); otherwise the
+    source is in context but does not back the claim. The excerpt is a verbatim
+    slice of doc.text, so anyone can check it with text[start:end] and the hash.
     """
-    focus_terms = set(tokenize(focus))
     best: tuple[float, int, int] | None = None
     for start, end in sentence_spans(doc.text):
         while start < end and doc.text[start].isspace():
             start += 1
         sentence = doc.text[start:end].rstrip()
-        terms = set(tokenize(sentence))
-        if not terms or scan(sentence).flagged:
+        terms = set(tokenize(sentence, parts=False))
+        if not terms or doc.scan.overlaps(start, end):
             continue
-        score = len(terms & focus_terms) / math.sqrt(len(terms))  # favour short, on-point sentences
+        support = support_score(sentence, answer)
+        if support < MIN_SUPPORT:
+            continue
+        score = support / math.sqrt(len(terms))  # favour short, on-point sentences
         if best is None or score > best[0]:
             best = (score, start, start + len(sentence))
     if best is None:

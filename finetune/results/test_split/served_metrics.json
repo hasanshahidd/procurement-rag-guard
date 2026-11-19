@@ -1,0 +1,110 @@
+{
+  "name": "served",
+  "label": "Served model, qwen2.5:1.5b via Ollama, no fine-tuning",
+  "n": 35,
+  "json_valid_rate": 0.971,
+  "status_accuracy": 0.6,
+  "citation_exact_match": 0.514,
+  "citation_precision": 0.65,
+  "citation_recall": 0.929,
+  "citation_f1": 0.765,
+  "injection_n": 7,
+  "injection_resisted_rate": 0.857,
+  "injection_answer_grounded_rate": 1.0,
+  "status_accuracy_by_category": {
+    "answered_single": 0.714,
+    "answered_multi": 0.857,
+    "insufficient_evidence": 0.429,
+    "conflict": 0.0,
+    "injection": 1.0
+  },
+  "status_per_class": {
+    "answered": {
+      "precision": 0.643,
+      "recall": 0.857,
+      "predicted": 28,
+      "gold": 21
+    },
+    "insufficient_evidence": {
+      "precision": 0.6,
+      "recall": 0.429,
+      "predicted": 5,
+      "gold": 7
+    },
+    "conflict": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "predicted": 1,
+      "gold": 7
+    }
+  },
+  "status_confusion": {
+    "answered": {
+      "answered": 18,
+      "insufficient_evidence": 2,
+      "conflict": 1,
+      "invalid": 0
+    },
+    "insufficient_evidence": {
+      "answered": 3,
+      "insufficient_evidence": 3,
+      "conflict": 0,
+      "invalid": 1
+    },
+    "conflict": {
+      "answered": 7,
+      "insufficient_evidence": 0,
+      "conflict": 0,
+      "invalid": 0
+    }
+  },
+  "base_model": "qwen2.5:1.5b via Ollama",
+  "base_model_revision": "65ec06548149b04c096a120e4a6da9d4017ea809c91734ea5631e89f96ddc57b",
+  "adapter": null,
+  "training": null,
+  "generation": {
+    "date": "2026-11-19",
+    "command": "python -m finetune.evaluate --heldout finetune/data/test.jsonl --ollama-model qwen2.5:1.5b --name served --label \"Served model, qwen2.5:1.5b via Ollama, no fine-tuning\" --out-dir finetune/results/test_split",
+    "heldout": "finetune/data/test.jsonl",
+    "heldout_sha256": "91c833e16f2e021ec3dac318a9fce169a82985ae823c654ca4b8b0725d12c6fc",
+    "backend": "ollama",
+    "ollama_version": "0.40.16",
+    "ollama_model": "qwen2.5:1.5b",
+    "ollama_digest": "65ec06548149b04c096a120e4a6da9d4017ea809c91734ea5631e89f96ddc57b",
+    "ollama_details": {
+      "parent_model": "",
+      "format": "gguf",
+      "family": "qwen2",
+      "families": [
+        "qwen2"
+      ],
+      "parameter_size": "1.5B",
+      "quantization_level": "Q4_K_M",
+      "context_length": 32768,
+      "embedding_length": 1536,
+      "runner": "ggml"
+    },
+    "options": {
+      "temperature": 0,
+      "seed": 7,
+      "num_predict": 400,
+      "num_ctx": 8192
+    },
+    "environment": {
+      "python": "3.11.9",
+      "platform": "Windows-10-10.0.26200-SP0",
+      "cpu": "11th Gen Intel(R) Core(TM) i5-1145G7 @ 2.60GHz",
+      "logical_cpus": 8,
+      "gpu": "none (CPU only)",
+      "torch": "2.15.0+cpu",
+      "transformers": "5.23.0",
+      "peft": "0.21.3",
+      "tokenizers": "0.23.3"
+    },
+    "eval_wall_seconds": 7691.6
+  },
+  "scored": {
+    "date": "2026-11-19",
+    "command": "python -m finetune.evaluate --heldout finetune/data/test.jsonl --ollama-model qwen2.5:1.5b --name served --label \"Served model, qwen2.5:1.5b via Ollama, no fine-tuning\" --out-dir finetune/results/test_split"
+  }
+}
