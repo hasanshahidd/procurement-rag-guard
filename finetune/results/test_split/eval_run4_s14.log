@@ -1,0 +1,113 @@
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  16%|#5        | 45/290 [00:00<00:00, 366.72it/s]Loading weights:  31%|###       | 89/290 [00:00<00:00, 400.29it/s]Loading weights:  45%|####4     | 130/290 [00:00<00:00, 390.34it/s]Loading weights:  59%|#####8    | 170/290 [00:00<00:00, 363.18it/s]Loading weights:  71%|#######1  | 207/290 [00:00<00:00, 360.69it/s]Loading weights:  84%|########4 | 244/290 [00:00<00:00, 353.36it/s]Loading weights:  97%|#########6| 280/290 [00:00<00:00, 345.81it/s]Loading weights: 100%|##########| 290/290 [00:00<00:00, 369.79it/s]
+C:\Users\HP\venvs\prg\Lib\site-packages\transformers\modeling_utils.py:3303: FutureWarning: `is_gradient_checkpointing` is deprecated and will be removed in v6. Use `is_activation_checkpointing` instead.
+  warnings.warn(
+[run4_s14] 1/35 test-001 7.2s
+[run4_s14] 2/35 test-002 13.8s
+[run4_s14] 3/35 test-003 11.5s
+[run4_s14] 4/35 test-004 11.1s
+[run4_s14] 5/35 test-005 12.5s
+[run4_s14] 6/35 test-006 9.4s
+[run4_s14] 7/35 test-007 11.8s
+[run4_s14] 8/35 test-008 13.6s
+[run4_s14] 9/35 test-009 8.7s
+[run4_s14] 10/35 test-010 9.4s
+[run4_s14] 11/35 test-011 7.5s
+[run4_s14] 12/35 test-012 11.8s
+[run4_s14] 13/35 test-013 12.4s
+[run4_s14] 14/35 test-014 11.2s
+[run4_s14] 15/35 test-015 15.3s
+[run4_s14] 16/35 test-016 8.5s
+[run4_s14] 17/35 test-017 9.8s
+[run4_s14] 18/35 test-018 11.4s
+[run4_s14] 19/35 test-019 9.3s
+[run4_s14] 20/35 test-020 11.8s
+[run4_s14] 21/35 test-021 6.9s
+[run4_s14] 22/35 test-022 9.5s
+[run4_s14] 23/35 test-023 8.1s
+[run4_s14] 24/35 test-024 10.1s
+[run4_s14] 25/35 test-025 12.0s
+[run4_s14] 26/35 test-026 9.6s
+[run4_s14] 27/35 test-027 14.4s
+[run4_s14] 28/35 test-028 9.8s
+[run4_s14] 29/35 test-029 9.2s
+[run4_s14] 30/35 test-030 13.0s
+[run4_s14] 31/35 test-031 8.7s
+[run4_s14] 32/35 test-032 10.9s
+[run4_s14] 33/35 test-033 10.0s
+[run4_s14] 34/35 test-034 7.3s
+[run4_s14] 35/35 test-035 12.1s
+{
+  "name": "run4_s14",
+  "label": "Run 4, seed 14 (300 rows, 1 epoch)",
+  "n": 35,
+  "json_valid_rate": 1.0,
+  "status_accuracy": 0.6,
+  "citation_exact_match": 0.429,
+  "citation_precision": 0.744,
+  "citation_recall": 0.69,
+  "citation_f1": 0.716,
+  "injection_n": 7,
+  "injection_resisted_rate": 1.0,
+  "injection_answer_grounded_rate": 1.0,
+  "status_accuracy_by_category": {
+    "answered_single": 1.0,
+    "answered_multi": 1.0,
+    "insufficient_evidence": 0.0,
+    "conflict": 0.0,
+    "injection": 1.0
+  },
+  "status_per_class": {
+    "answered": {
+      "precision": 0.6,
+      "recall": 1.0,
+      "predicted": 35,
+      "gold": 21
+    },
+    "insufficient_evidence": {
+      "precision": null,
+      "recall": 0.0,
+      "predicted": 0,
+      "gold": 7
+    },
+    "conflict": {
+      "precision": null,
+      "recall": 0.0,
+      "predicted": 0,
+      "gold": 7
+    }
+  },
+  "status_confusion": {
+    "answered": {
+      "answered": 21,
+      "insufficient_evidence": 0,
+      "conflict": 0,
+      "invalid": 0
+    },
+    "insufficient_evidence": {
+      "answered": 7,
+      "insufficient_evidence": 0,
+      "conflict": 0,
+      "invalid": 0
+    },
+    "conflict": {
+      "answered": 7,
+      "insufficient_evidence": 0,
+      "conflict": 0,
+      "invalid": 0
+    }
+  },
+  "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "base_model_revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+  "adapter": "finetune/outputs/run4_300rows_seed14/qwen2.5-0.5b-procurement-lora",
+  "training": {
+    "command": "python -m finetune.train_lora --train finetune/data/train_300.jsonl --epochs 1 --lr 2e-4 --grad-accum 2 --threads 4 --seed 14 --output-dir finetune/outputs/run4_300rows_seed14/qwen2.5-0.5b-procurement-lora",
+    "epochs": 1,
+    "lr": 0.0002,
+    "grad_accum": 2,
+    "oversample": {},
+    "examples_per_epoch": 300,
+    "optimizer_steps": 150,
+    "final_loss": 0.0294,
+    "train_wall_seconds": 2964.1
+  }
+}

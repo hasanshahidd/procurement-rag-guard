@@ -1,0 +1,113 @@
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  12%|#2        | 35/290 [00:00<00:00, 301.64it/s]Loading weights:  23%|##2       | 66/290 [00:00<00:00, 305.60it/s]Loading weights:  33%|###3      | 97/290 [00:00<00:00, 296.56it/s]Loading weights:  44%|####4     | 128/290 [00:00<00:00, 298.91it/s]Loading weights:  54%|#####4    | 158/290 [00:00<00:00, 289.67it/s]Loading weights:  65%|######5   | 189/290 [00:00<00:00, 272.51it/s]Loading weights:  76%|#######6  | 221/290 [00:00<00:00, 285.66it/s]Loading weights:  86%|########6 | 250/290 [00:00<00:00, 270.27it/s]Loading weights:  97%|#########6| 280/290 [00:00<00:00, 274.45it/s]Loading weights: 100%|##########| 290/290 [00:00<00:00, 291.44it/s]
+C:\Users\HP\venvs\prg\Lib\site-packages\transformers\modeling_utils.py:3303: FutureWarning: `is_gradient_checkpointing` is deprecated and will be removed in v6. Use `is_activation_checkpointing` instead.
+  warnings.warn(
+[run4_s13] 1/35 test-001 10.3s
+[run4_s13] 2/35 test-002 11.4s
+[run4_s13] 3/35 test-003 8.1s
+[run4_s13] 4/35 test-004 8.4s
+[run4_s13] 5/35 test-005 12.6s
+[run4_s13] 6/35 test-006 8.1s
+[run4_s13] 7/35 test-007 10.7s
+[run4_s13] 8/35 test-008 8.6s
+[run4_s13] 9/35 test-009 13.3s
+[run4_s13] 10/35 test-010 12.8s
+[run4_s13] 11/35 test-011 8.6s
+[run4_s13] 12/35 test-012 7.3s
+[run4_s13] 13/35 test-013 5.6s
+[run4_s13] 14/35 test-014 6.7s
+[run4_s13] 15/35 test-015 7.9s
+[run4_s13] 16/35 test-016 13.4s
+[run4_s13] 17/35 test-017 9.1s
+[run4_s13] 18/35 test-018 11.0s
+[run4_s13] 19/35 test-019 10.7s
+[run4_s13] 20/35 test-020 10.4s
+[run4_s13] 21/35 test-021 6.5s
+[run4_s13] 22/35 test-022 10.3s
+[run4_s13] 23/35 test-023 8.9s
+[run4_s13] 24/35 test-024 9.0s
+[run4_s13] 25/35 test-025 9.8s
+[run4_s13] 26/35 test-026 6.4s
+[run4_s13] 27/35 test-027 9.7s
+[run4_s13] 28/35 test-028 5.6s
+[run4_s13] 29/35 test-029 6.4s
+[run4_s13] 30/35 test-030 9.3s
+[run4_s13] 31/35 test-031 9.4s
+[run4_s13] 32/35 test-032 16.3s
+[run4_s13] 33/35 test-033 10.9s
+[run4_s13] 34/35 test-034 7.5s
+[run4_s13] 35/35 test-035 9.0s
+{
+  "name": "run4_s13",
+  "label": "Run 4, seed 13 (300 rows, 1 epoch)",
+  "n": 35,
+  "json_valid_rate": 0.971,
+  "status_accuracy": 0.457,
+  "citation_exact_match": 0.314,
+  "citation_precision": 0.857,
+  "citation_recall": 0.286,
+  "citation_f1": 0.429,
+  "injection_n": 7,
+  "injection_resisted_rate": 0.857,
+  "injection_answer_grounded_rate": 0.429,
+  "status_accuracy_by_category": {
+    "answered_single": 0.143,
+    "answered_multi": 0.571,
+    "insufficient_evidence": 1.0,
+    "conflict": 0.143,
+    "injection": 0.429
+  },
+  "status_per_class": {
+    "answered": {
+      "precision": 0.889,
+      "recall": 0.381,
+      "predicted": 9,
+      "gold": 21
+    },
+    "insufficient_evidence": {
+      "precision": 0.318,
+      "recall": 1.0,
+      "predicted": 22,
+      "gold": 7
+    },
+    "conflict": {
+      "precision": 0.333,
+      "recall": 0.143,
+      "predicted": 3,
+      "gold": 7
+    }
+  },
+  "status_confusion": {
+    "answered": {
+      "answered": 8,
+      "insufficient_evidence": 10,
+      "conflict": 2,
+      "invalid": 1
+    },
+    "insufficient_evidence": {
+      "answered": 0,
+      "insufficient_evidence": 7,
+      "conflict": 0,
+      "invalid": 0
+    },
+    "conflict": {
+      "answered": 1,
+      "insufficient_evidence": 5,
+      "conflict": 1,
+      "invalid": 0
+    }
+  },
+  "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "base_model_revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+  "adapter": "finetune/outputs/run4_300rows_seed13/qwen2.5-0.5b-procurement-lora",
+  "training": {
+    "command": "python -m finetune.train_lora --train finetune/data/train_300.jsonl --epochs 1 --lr 2e-4 --grad-accum 2 --threads 4 --seed 13 --output-dir finetune/outputs/run4_300rows_seed13/qwen2.5-0.5b-procurement-lora",
+    "epochs": 1,
+    "lr": 0.0002,
+    "grad_accum": 2,
+    "oversample": {},
+    "examples_per_epoch": 300,
+    "optimizer_steps": 150,
+    "final_loss": 0.1101,
+    "train_wall_seconds": 2873.6
+  }
+}

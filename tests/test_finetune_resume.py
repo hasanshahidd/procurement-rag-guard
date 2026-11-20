@@ -12,7 +12,9 @@ import random
 import pytest
 
 torch = pytest.importorskip("torch")
-from finetune import train_lora  # noqa: E402  (needs torch)
+pytest.importorskip("peft")  # train_lora imports the whole ML stack (requirements-ml.txt)
+pytest.importorskip("transformers")
+from finetune import train_lora  # noqa: E402
 
 CATEGORIES = ["answered_single", "answered_multi", "insufficient_evidence", "conflict", "injection"]
 

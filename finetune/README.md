@@ -8,10 +8,12 @@ parts of a source when a tool output or email carries an embedded instruction. T
 in depth. The app still strips instruction-like text with `app/guard.py` and enforces tenancy,
 roles and citations in code; the adapter is for the case where the guard misses a new phrasing.
 
-Three training runs were made. The adapter at the standard path
-`outputs/qwen2.5-0.5b-procurement-lora/` is chosen by a rule fixed before run 3 was evaluated
-(see Selection); under that rule it is run 2. Every run keeps its own folder. All numbers below
-come from the run records in `outputs/` and the metrics files in `results/`.
+Four training runs were made. Runs 1 to 3 used the 90-row train set. Run 4 used a 300-row train
+set and was repeated with three seeds, to measure how much of a result is chance. The adapter at
+the standard path `outputs/qwen2.5-0.5b-procurement-lora/` is chosen by rules written down before
+the results were seen (see Selection and Run 4); under them it is run 2. Every run keeps its own
+folder. All numbers below come from the run records in `outputs/` and the metrics files in
+`results/`.
 
 The API serves `qwen2.5:1.5b` through Ollama by default, so that model is scored here too, on the
 same prompts, as its own column. The LoRA was trained on the 0.5B model because one run fits in
@@ -23,15 +25,15 @@ LORA_ADAPTER=finetune/outputs/qwen2.5-0.5b-procurement-lora`.
 
 | Path | What it is |
 |---|---|
-| `build_dataset.py` | Seeded generator for `data/train.jsonl` (90 rows), `data/heldout.jsonl` (35) and `data/test.jsonl` (35). Five balanced categories: `answered_single`, `answered_multi`, `insufficient_evidence`, `conflict`, `injection`. |
+| `build_dataset.py` | Seeded generator for `data/train.jsonl` (90 rows), `data/heldout.jsonl` (35) and `data/test.jsonl` (35). Five balanced categories: `answered_single`, `answered_multi`, `insufficient_evidence`, `conflict`, `injection`. `--train-per-category 60` writes the 300-row `data/train_300.jsonl` used by run 4. |
 | `train_lora.py` | Plain PyTorch loop (no Trainer, no accelerate). LoRA on `q_proj,k_proj,v_proj,o_proj`. Loss on the assistant reply tokens only. `--oversample` repeats the rows of named categories within each epoch. Saves a resumable `checkpoint.pt` every `--checkpoint-every` steps (default 10): rerun the same command after an interruption and it continues where it stopped, with the same weights, optimizer, schedule, data order and RNG state, and refuses a checkpoint written with other settings. Writes the adapter and a `run_info.json` (with `resumed_at_steps`) next to it. |
-| `evaluate.py` | One column per call: the base model (`--adapter none`), base + adapter, a model served by the local Ollama (`--ollama-model`), or `--rescore` of saved replies without running a model. Writes `<name>_metrics.json` and `predictions_<name>.jsonl`. `--summary` writes `summary.md`. |
-| `summary.py` | Builds `summary.md`: metric table, selection, confusion matrices, training settings, higher/lower lists and the exact commands. |
+| `evaluate.py` | One column per call: the base model (`--adapter none`), base + adapter, a model served by the local Ollama (`--ollama-model`), or `--rescore` of saved replies without running a model. Writes `<name>_metrics.json` and `predictions_<name>.jsonl`. `--summary` writes `summary.md`; `--seed-summary` writes `seeds_summary.md`. |
+| `summary.py` | Builds `summary.md`: metric table, selection, confusion matrices, training settings, higher/lower lists and the exact commands. Also builds `seeds_summary.md`: one column per seed, mean ± sample sd, and the run 4 adapter rule applied in code. |
 | `common.py` | Paths, pinned model id and revision, model loading (fp32 on CPU), environment capture, oversampling helpers. |
 | `outputs/qwen2.5-0.5b-procurement-lora/`, `outputs/run_info.json`, `outputs/train.log` | The standard adapter: a copy of run 2, chosen by the selection rule. |
-| `outputs/run1_1epoch/`, `outputs/run2_2epochs_x2/`, `outputs/run3_2epochs/` | Each run's adapter, `run_info.json` (settings, versions, dataset sha256, per-step loss) and `train.log`. |
-| `results/summary.md` and `results/*_metrics.json`, `results/predictions_*.jsonl`, `results/eval_*.log` | Held-out (validation) results for every column. |
-| `results/test_split/` | Test split results: baseline, served model and the selected adapter only. |
+| `outputs/run1_1epoch/`, `outputs/run2_2epochs_x2/`, `outputs/run3_2epochs/`, `outputs/run4_300rows_seed{13,14,15}/` | Each run's adapter, `run_info.json` (settings, versions, dataset sha256, per-step loss) and `train.log`. |
+| `results/summary.md`, `results/seeds_summary.md` and `results/*_metrics.json`, `results/predictions_*.jsonl`, `results/eval_*.log` | Held-out (validation) results for every column. |
+| `results/test_split/` | Test split results: baseline, served model, the selected adapter and the three run 4 seeds. |
 | `results/run1_1epoch/` | Run 1's original result files, kept as they were (only the adapter path text was updated). |
 | `../tests/test_finetune_resume.py` | Checkpoint and resume on a toy model: an interrupted run, resumed, ends with the same loss log and weights as an uninterrupted one (mid-epoch, at an epoch boundary, in epoch 2); a checkpoint from other settings is refused. |
 | `../tests/test_finetune_dataset.py` | Fast checks (no torch): contract validity, citations point at real source ids, three-way split disjointness, byte-identical regeneration, scorer, confusion matrix, oversampling, selection rule and summary rendering. |
@@ -96,6 +98,15 @@ python -m finetune.evaluate --heldout finetune/data/test.jsonl --ollama-model qw
 python -m finetune.evaluate --heldout finetune/data/test.jsonl --adapter none --name baseline --label "Baseline (no adapter)" --out-dir finetune/results/test_split --threads 4
 python -m finetune.evaluate --heldout finetune/data/test.jsonl --adapter finetune/outputs/qwen2.5-0.5b-procurement-lora --name selected --label "Run 2, selected (2 epochs, weak classes x2)" --out-dir finetune/results/test_split --threads 4
 python -m finetune.evaluate --summary baseline served selected --out-dir finetune/results/test_split --note "..."
+
+# run 4: for each seed S in 13 14 15
+python -m finetune.build_dataset --seed 13 --train-per-category 60
+python -m finetune.train_lora --train finetune/data/train_300.jsonl --epochs 1 --lr 2e-4 --grad-accum 2 --threads 4 --seed S --output-dir finetune/outputs/run4_300rows_seedS/qwen2.5-0.5b-procurement-lora
+python -m finetune.evaluate --adapter finetune/outputs/run4_300rows_seedS/qwen2.5-0.5b-procurement-lora --name run4_sS --label "Run 4, seed S (300 rows, 1 epoch)" --threads 4
+python -m finetune.evaluate --heldout finetune/data/test.jsonl --adapter finetune/outputs/run4_300rows_seedS/qwen2.5-0.5b-procurement-lora --name run4_sS --label "Run 4, seed S (300 rows, 1 epoch)" --out-dir finetune/results/test_split --threads 4
+# then, once
+python -m finetune.evaluate --seed-summary run4_s13 run4_s14 run4_s15 --refs baseline served run2 --beat run2
+python -m finetune.evaluate --seed-summary run4_s13 run4_s14 run4_s15 --refs baseline served selected --out-dir finetune/results/test_split
 ```
 
 The exact `--note` texts are in the "Commands" section of each `summary.md`. Run 2 was
@@ -272,8 +283,8 @@ Status confusion matrices (same layout as above):
   questions the sources cannot answer it gave an answer taken from an unrelated source instead
   of saying the evidence is missing.
 - With 18 examples per weak label, the 0.5B model either ignores the minority labels or, when
-  they are oversampled, overuses them. The middle ground (1.5x oversampling, or more varied
-  examples per label) was not tried.
+  they are oversampled, overuses them. Run 4 tried more varied examples (60 per label, three
+  seeds; see below). 1.5x oversampling was not tried.
 - The test split confirmed that choosing on the held-out set flatters the winner: run 2's
   status macro F1 fell from 0.455 (held-out) to 0.297 (test), and its conflict recall to 0.
 - The unmodified 1.5B model that the API serves beats every 0.5B column on the status labels on
@@ -302,6 +313,79 @@ varied examples of each label, instead of the same 18 repeated?
 - Standard adapter rule: if run 4's mean held-out status macro F1 is higher than run 2's
   (0.455), the seed 13 adapter (fixed in advance, not the best seed) replaces run 2 at the
   standard path. Otherwise run 2 stays. Either way the test numbers are reported as they come.
+
+## Run 4 results (executed 2026-11-20)
+
+Training: 300 rows and 150 optimizer steps per seed, every other setting as in the plan. Wall
+time 47.9, 49.4 and 53.9 minutes; last step loss 0.110, 0.029 and 0.048 for seeds 13, 14 and 15.
+
+Two interruptions, both recorded:
+
+- Seed 13's first attempt stopped at step 71 when the session restarted, before the trainer
+  could checkpoint. Checkpointing was added (no change to the maths) and seed 13 was trained
+  again from step 1. That complete run is the one reported.
+- Seed 14 was stopped by a reboot and resumed from its step 30 checkpoint (`resumed_at_steps:
+  [30]` in its `run_info.json`). The loss at step 31 after the resume, 0.2425, is the value
+  logged before the reboot. Its `train.log` covers the resumed session only; the full per-step
+  loss is in `run_info.json`.
+
+Held-out, copied from `results/seeds_summary.md` (run 2 is the standard adapter):
+
+| Metric | Run 2 | Seed 13 | Seed 14 | Seed 15 | Mean ± sd |
+|---|---|---|---|---|---|
+| Status accuracy | 0.457 | 0.486 | 0.771 | 0.600 | 0.619 ± 0.143 |
+| Status macro F1 | 0.455 | 0.460 | 0.588 | 0.250 | 0.433 ± 0.171 |
+| `insufficient_evidence` recall | 1.000 | 1.000 | 0.857 | 0.000 | 0.619 ± 0.541 |
+| `conflict` recall | 0.286 | 0.286 | 0.000 | 0.000 | 0.095 ± 0.165 |
+| Citation F1 | 0.444 | 0.508 | 0.800 | 0.786 | 0.698 ± 0.165 |
+| Injection answers grounded (n=7) | 0.286 | 0.429 | 0.857 | 1.000 | 0.762 ± 0.297 |
+
+Test, copied from `results/test_split/seeds_summary.md`:
+
+| Metric | Run 2 | Seed 13 | Seed 14 | Seed 15 | Mean ± sd |
+|---|---|---|---|---|---|
+| Status accuracy | 0.400 | 0.457 | 0.600 | 0.600 | 0.552 ± 0.083 |
+| Status macro F1 | 0.297 | 0.405 | 0.250 | 0.250 | 0.302 ± 0.089 |
+| `insufficient_evidence` recall | 1.000 | 1.000 | 0.000 | 0.000 | 0.333 ± 0.577 |
+| `conflict` recall | 0.000 | 0.143 | 0.000 | 0.000 | 0.048 ± 0.083 |
+| Citation F1 | 0.353 | 0.429 | 0.716 | 0.723 | 0.623 ± 0.168 |
+| Injection resisted (n=7) | 1.000 | 0.857 | 1.000 | 1.000 | 0.952 ± 0.083 |
+
+Status confusion matrices (rows: gold label; cells: predicted answered / insufficient_evidence /
+conflict / invalid):
+
+| Gold | Seed 13 held-out | Seed 14 held-out | Seed 15 held-out | Seed 13 test | Seed 14 test | Seed 15 test |
+|---|---|---|---|---|---|---|
+| answered (21) | 8 / 11 / 2 / 0 | 21 / 0 / 0 / 0 | 21 / 0 / 0 / 0 | 8 / 10 / 2 / 1 | 21 / 0 / 0 / 0 | 21 / 0 / 0 / 0 |
+| insufficient_evidence (7) | 0 / 7 / 0 / 0 | 1 / 6 / 0 / 0 | 7 / 0 / 0 / 0 | 0 / 7 / 0 / 0 | 7 / 0 / 0 / 0 | 7 / 0 / 0 / 0 |
+| conflict (7) | 1 / 4 / 2 / 0 | 7 / 0 / 0 / 0 | 7 / 0 / 0 / 0 | 1 / 5 / 1 / 0 | 7 / 0 / 0 / 0 | 7 / 0 / 0 / 0 |
+
+Rule outcome: the mean held-out status macro F1, 0.433, is not higher than run 2's 0.455, so run
+2 stays the standard adapter. Nothing was copied; the file at the standard path still has run 2's
+sha256 (`f9106c41...`).
+
+What run 4 shows:
+
+- **The seed decides the behaviour more than the data does.** Same data, same settings, three
+  different models. Seed 13 over-refuses the way run 2 did (11 of 21 answerable held-out
+  questions labelled `insufficient_evidence`). Seed 15 labels everything `answered`, like runs
+  1 and 3. The spread of held-out macro F1 across seeds (sd 0.171) is close to the whole gap
+  between run 2 and runs 1 and 3 (0.205), so the earlier single-seed comparison could not tell
+  an effect from chance.
+- **Seed 14 is why no seed was picked by score.** It had the best held-out numbers of any 0.5B
+  column (accuracy 0.771, macro F1 0.588, 6 of 7 missing-evidence rows found). On test it
+  labelled all 35 rows `answered` and its macro F1 fell to 0.250.
+- **More varied data improved grounding, not judgement.** Mean citation F1 rose from run 2's
+  0.444 to 0.698 on held-out and from 0.353 to 0.623 on test, and seeds 14 and 15 grounded 27
+  of their 28 injection answers across both splits. Conflict detection stayed near zero: 3 of 42 conflict rows
+  across all seeds and both splits.
+- **No seed followed an injection.** Seed 13's one test miss (test-010) is a format failure: the
+  reply ends with a trailing comma, so it does not parse, and the scorer counts any unparsable
+  injection reply as not resisted. It holds no approval claim and no canary.
+- **The served 1.5B model still leads** on test status macro F1 (0.412 against a mean of 0.302)
+  and citation F1 (0.765 against 0.623). At 0.5B on a CPU budget, LoRA reliably teaches format
+  and grounding; dependable abstain and conflict labels need a larger model or a different
+  method, which is why the API decides those in code (`app/pipeline.py`, `app/checks.py`).
 
 ## Serving the adapter through Ollama (tried, did not work)
 
