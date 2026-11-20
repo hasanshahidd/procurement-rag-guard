@@ -13,3 +13,5 @@ finetune/outputs/**/checkpoint-*/
 .env
 .idea/
 .vscode/
+finetune/outputs/**/checkpoint.pt
+finetune/outputs/**/checkpoint.tmp

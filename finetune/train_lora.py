@@ -67,7 +67,53 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--dropout", type=float, default=0.05)
     p.add_argument("--seed", type=int, default=13)
     p.add_argument("--threads", type=int, default=DEFAULT_THREADS)
+    p.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=10,
+        help="save a resumable checkpoint every N optimizer steps (0 = never); rerun the same command to resume",
+    )
     return p.parse_args(argv)
+
+
+# Settings that must match for a checkpoint to be resumed; anything else would mix two different runs.
+RESUME_KEYS = ("epochs", "lr", "max_len", "limit", "grad_accum", "oversample", "rank", "alpha", "dropout", "seed")
+
+
+def checkpoint_signature(args: argparse.Namespace) -> dict:
+    return {"train_sha256": sha256(args.train), **{k: getattr(args, k) for k in RESUME_KEYS}}
+
+
+def save_checkpoint(path: Path, model, opt, sched, rng: random.Random, position: dict) -> None:
+    """Everything needed to continue exactly: trainable weights, optimizer, schedule, data order and RNG state."""
+    state = {
+        **position,
+        "trainable": {n: p.detach().clone() for n, p in model.named_parameters() if p.requires_grad},
+        "opt": opt.state_dict(),
+        "sched": sched.state_dict(),
+        "rng": rng.getstate(),
+        "torch_rng": torch.get_rng_state(),
+    }
+    tmp = path.with_suffix(".tmp")
+    torch.save(state, tmp)
+    tmp.replace(path)  # atomic, so a kill during the save never leaves a half-written checkpoint
+
+
+def load_checkpoint(path: Path, model, opt, sched, rng: random.Random, signature: dict) -> dict | None:
+    if not path.exists():
+        return None
+    state = torch.load(path, weights_only=False)  # our own file, written by save_checkpoint
+    if state["signature"] != signature:
+        raise SystemExit(f"{path} was written with different settings or data; delete it to start this run fresh")
+    with torch.no_grad():
+        for name, param in model.named_parameters():
+            if name in state["trainable"]:
+                param.copy_(state["trainable"][name])
+    opt.load_state_dict(state["opt"])
+    sched.load_state_dict(state["sched"])
+    rng.setstate(state["rng"])
+    torch.set_rng_state(state["torch_rng"])
+    return state
 
 
 def encode(tok, row: dict) -> tuple[list[int], int]:
@@ -106,18 +152,28 @@ def reply_loss(model, ex: dict) -> torch.Tensor:
     return F.cross_entropy(logits, ids[0, -n:])
 
 
-def train(model, examples: list[dict], args: argparse.Namespace) -> list[dict]:
+def train(model, examples: list[dict], args: argparse.Namespace, ckpt: Path | None = None) -> dict:
+    """Returns the loss log, the steps it resumed at, and the training seconds summed over every session."""
     params = [p for p in model.parameters() if p.requires_grad]
     opt = torch.optim.AdamW(params, lr=args.lr, weight_decay=0.0)
     categories = [ex["category"] for ex in examples]
     per_epoch = sum(args.oversample.get(c, 1) for c in categories)
     total = math.ceil(per_epoch / args.grad_accum) * args.epochs
     sched = LambdaLR(opt, lambda s: max(0.0, 1 - s / total))  # linear decay to zero
-    rng, log = random.Random(args.seed), []
+    rng, log, resumed, before = random.Random(args.seed), [], [], 0.0
+    signature = checkpoint_signature(args)
+    state = load_checkpoint(ckpt, model, opt, sched, rng, signature) if ckpt else None
+    first_epoch, first_start = 1, 0
+    if state:
+        first_epoch, first_start, log, before = state["epoch"], state["start"], state["log"], state["seconds"]
+        resumed = [*state["resumed"], len(log)]
+        print(f"resumed from {ckpt} at step {len(log)}/{total}", flush=True)
+    session_t0 = time.perf_counter()
     model.train()
-    for epoch in range(1, args.epochs + 1):
-        order = epoch_order(categories, args.oversample, rng)
-        for start in range(0, len(order), args.grad_accum):
+    for epoch in range(first_epoch, args.epochs + 1):
+        resuming = state is not None and epoch == first_epoch
+        order = state["order"] if resuming else epoch_order(categories, args.oversample, rng)
+        for start in range(first_start if resuming else 0, len(order), args.grad_accum):
             batch, t0, step_loss = order[start : start + args.grad_accum], time.perf_counter(), 0.0
             for idx in batch:
                 loss = reply_loss(model, examples[idx]) / len(batch)
@@ -137,7 +193,18 @@ def train(model, examples: list[dict], args: argparse.Namespace) -> list[dict]:
             print(
                 f"step {entry['step']}/{total} epoch {epoch} loss {entry['loss']:.4f} ({entry['seconds']}s)", flush=True
             )
-    return log
+            if ckpt and args.checkpoint_every and len(log) % args.checkpoint_every == 0 and len(log) < total:
+                position = {
+                    "signature": signature,
+                    "epoch": epoch,
+                    "start": start + args.grad_accum,
+                    "order": order,
+                    "log": log,
+                    "resumed": resumed,
+                    "seconds": before + time.perf_counter() - session_t0,
+                }
+                save_checkpoint(ckpt, model, opt, sched, rng, position)
+    return {"log": log, "resumed_at_steps": resumed, "seconds": before + time.perf_counter() - session_t0}
 
 
 def write_model_card(output_dir: Path) -> None:
@@ -172,11 +239,12 @@ def main(argv: list[str] | None = None) -> None:
         f"{len(examples)} examples ({len(skipped)} skipped, longest {longest} tokens), {trainable:,} trainable params",
         flush=True,
     )
-    t0 = time.perf_counter()
-    log = train(model, examples, args)
-    wall = time.perf_counter() - t0
+    ckpt = args.output_dir.parent / "checkpoint.pt"
+    result = train(model, examples, args, ckpt if args.checkpoint_every else None)
+    log, wall = result["log"], result["seconds"]
     model.save_pretrained(args.output_dir)
     write_model_card(args.output_dir)
+    ckpt.unlink(missing_ok=True)  # the finished adapter replaces it
     info = {
         "finished_utc": datetime.now(UTC).isoformat(timespec="seconds"),
         "command": "python -m finetune.train_lora " + " ".join(sys.argv[1:] if argv is None else argv),
@@ -194,6 +262,7 @@ def main(argv: list[str] | None = None) -> None:
         "optimizer_steps": len(log),
         "final_loss": log[-1]["loss"] if log else None,
         "train_wall_seconds": round(wall, 1),
+        "resumed_at_steps": result["resumed_at_steps"],  # empty when the run was never interrupted
         "loss_log": log,
     }
     run_info = args.output_dir.parent / "run_info.json"

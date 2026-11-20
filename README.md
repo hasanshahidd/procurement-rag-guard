@@ -363,6 +363,7 @@ Last local run: 244 passed (including 3 browser tests), 2 live tests passed agai
 | `tests/test_security.py` | injection variants, false positives on real policy text, compromised-model regression, cross-tenant ingest attack, naive vs guarded reproduction |
 | `tests/test_hybrid_and_storage.py` | hybrid retrieval finds paraphrases, still abstains off topic, only ranks visible records, falls back to BM25, embedding cache, SQLite persistence across restarts |
 | `tests/test_finetune_dataset.py` | fine-tuning data contract, train and held-out disjointness, deterministic generation |
+| `tests/test_finetune_resume.py` | an interrupted LoRA run resumes from its checkpoint to the same weights and loss log (toy model, skipped without torch) |
 | `tests/test_live_llm.py` | same security properties against the real model (marked `live`, skipped by default) |
 | `tests/test_ui_e2e.py` | the web UI in a real browser (Playwright, scripted model): the poisoned quote shows what was removed and the struck-out text, another company's question is refused, New chat resets, the phone layout has no sideways scroll and a working menu |
 

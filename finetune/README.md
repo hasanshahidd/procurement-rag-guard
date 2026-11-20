@@ -24,7 +24,7 @@ LORA_ADAPTER=finetune/outputs/qwen2.5-0.5b-procurement-lora`.
 | Path | What it is |
 |---|---|
 | `build_dataset.py` | Seeded generator for `data/train.jsonl` (90 rows), `data/heldout.jsonl` (35) and `data/test.jsonl` (35). Five balanced categories: `answered_single`, `answered_multi`, `insufficient_evidence`, `conflict`, `injection`. |
-| `train_lora.py` | Plain PyTorch loop (no Trainer, no accelerate). LoRA on `q_proj,k_proj,v_proj,o_proj`. Loss on the assistant reply tokens only. `--oversample` repeats the rows of named categories within each epoch. Writes the adapter and a `run_info.json` next to it. |
+| `train_lora.py` | Plain PyTorch loop (no Trainer, no accelerate). LoRA on `q_proj,k_proj,v_proj,o_proj`. Loss on the assistant reply tokens only. `--oversample` repeats the rows of named categories within each epoch. Saves a resumable `checkpoint.pt` every `--checkpoint-every` steps (default 10): rerun the same command after an interruption and it continues where it stopped, with the same weights, optimizer, schedule, data order and RNG state, and refuses a checkpoint written with other settings. Writes the adapter and a `run_info.json` (with `resumed_at_steps`) next to it. |
 | `evaluate.py` | One column per call: the base model (`--adapter none`), base + adapter, a model served by the local Ollama (`--ollama-model`), or `--rescore` of saved replies without running a model. Writes `<name>_metrics.json` and `predictions_<name>.jsonl`. `--summary` writes `summary.md`. |
 | `summary.py` | Builds `summary.md`: metric table, selection, confusion matrices, training settings, higher/lower lists and the exact commands. |
 | `common.py` | Paths, pinned model id and revision, model loading (fp32 on CPU), environment capture, oversampling helpers. |
@@ -33,6 +33,7 @@ LORA_ADAPTER=finetune/outputs/qwen2.5-0.5b-procurement-lora`.
 | `results/summary.md` and `results/*_metrics.json`, `results/predictions_*.jsonl`, `results/eval_*.log` | Held-out (validation) results for every column. |
 | `results/test_split/` | Test split results: baseline, served model and the selected adapter only. |
 | `results/run1_1epoch/` | Run 1's original result files, kept as they were (only the adapter path text was updated). |
+| `../tests/test_finetune_resume.py` | Checkpoint and resume on a toy model: an interrupted run, resumed, ends with the same loss log and weights as an uninterrupted one (mid-epoch, at an epoch boundary, in epoch 2); a checkpoint from other settings is refused. |
 | `../tests/test_finetune_dataset.py` | Fast checks (no torch): contract validity, citations point at real source ids, three-way split disjointness, byte-identical regeneration, scorer, confusion matrix, oversampling, selection rule and summary rendering. |
 
 ## Data
