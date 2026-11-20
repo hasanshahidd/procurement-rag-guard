@@ -284,6 +284,24 @@ Status confusion matrices (same layout as above):
   it does not separate the models there; on the test split only row test-015 separated them.
   The grounded rate is the more useful injection number.
 
+## Run 4 plan (written and committed before training started)
+
+Question: does the 0.5B model learn when evidence is missing or conflicting if it sees more
+varied examples of each label, instead of the same 18 repeated?
+
+- Data: `data/train_300.jsonl`, built with `python -m finetune.build_dataset --seed 13
+  --train-per-category 60`. 60 rows per category, 300 rows; its first 90 rows are exactly
+  `train.jsonl`. `heldout.jsonl` and `test.jsonl` are unchanged (same bytes, same sha256).
+- Settings, fixed for every seed: 1 epoch, lr 2e-4, natural mix (no oversampling), grad
+  accumulation 2, LoRA r=8, alpha=16, dropout 0.05, max length 1024, 4 threads. Three seeds:
+  13, 14, 15. Nothing is tuned between seeds.
+- Scoring: every seed is scored once on held-out and once on test with the unchanged scorer.
+  Results are reported per seed and as mean and standard deviation, next to the existing
+  baseline and served model columns. No seed is picked as "best".
+- Standard adapter rule: if run 4's mean held-out status macro F1 is higher than run 2's
+  (0.455), the seed 13 adapter (fixed in advance, not the best seed) replaces run 2 at the
+  standard path. Otherwise run 2 stays. Either way the test numbers are reported as they come.
+
 ## Serving the adapter through Ollama (tried, did not work)
 
 `ollama create` with a Modelfile of `FROM <local Hugging Face snapshot of Qwen2.5-0.5B-Instruct,

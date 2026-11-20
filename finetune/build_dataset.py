@@ -450,10 +450,10 @@ BUILDERS: dict[str, Callable[[Gen, int], dict]] = {
 }
 
 
-def build_split(split: str, pool: Pool, seed: int) -> list[dict]:
+def build_split(split: str, pool: Pool, seed: int, per_category: int | None = None) -> list[dict]:
     rng = random.Random(f"{seed}:{split}")  # str seeds are hashed with sha512, stable across runs
     rows: list[dict] = []
-    for i in range(PER_CATEGORY[split]):
+    for i in range(per_category or PER_CATEGORY[split]):
         for category in CATEGORIES:  # interleaved, so any --limit prefix stays balanced
             row = BUILDERS[category](Gen(rng, pool), i)
             rows.append({"id": f"{split}-{len(rows) + 1:03d}", "category": category, **row})
@@ -499,7 +499,21 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument("--out-dir", type=Path, default=DATA_DIR)
+    parser.add_argument(
+        "--train-per-category",
+        type=int,
+        help="write only a larger train split, to train_<rows>.jsonl; held-out and test files are left untouched",
+    )
     args = parser.parse_args(argv)
+    if args.train_per_category:
+        # Same random stream as train.jsonl, so its rows are the first rows of this file.
+        rows = build_split("train", POOLS["train"], args.seed, args.train_per_category)
+        others = {name: build_split(name, pool, args.seed) for name, pool in POOLS.items() if name != "train"}
+        check_disjoint({"train": rows, **others})
+        path = args.out_dir / f"train_{len(rows)}.jsonl"
+        write_jsonl(path, rows)
+        print(f"{len(rows)} train rows written to {path}")
+        return
     splits = {name: build_split(name, pool, args.seed) for name, pool in POOLS.items()}
     check_disjoint(splits)
     for name, rows in splits.items():
