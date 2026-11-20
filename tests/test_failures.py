@@ -95,10 +95,16 @@ def test_failed_logins_are_rate_limited(make_client):
     assert codes == [401, 401, 429]
 
 
-def test_transformers_backend_is_lazy_and_names_the_adapter():
+def test_transformers_backend_is_lazy_and_names_the_adapter(monkeypatch):
+    import importlib.util
+
     llm = build_llm(Settings(llm_backend="transformers", lora_adapter="finetune/outputs/adapter"))
     assert llm.name == "transformers:Qwen/Qwen2.5-0.5B-Instruct+lora:finetune/outputs/adapter"
+    # Pin package discovery so the result does not depend on whether requirements-ml.txt is installed.
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
     assert llm.health() == {"reachable": True, "detail": "loads on first request"}
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: None)
+    assert llm.health() == {"reachable": False, "detail": "missing packages: torch, transformers, peft"}
 
 
 def test_every_answer_is_audited_without_credentials(make_client, settings):
