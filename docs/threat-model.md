@@ -61,6 +61,6 @@ Scope: the `/ask` and `/tickets` paths of this service, for the scenario where a
 ## Residual risk
 
 - The guard is a pattern list. A novel phrasing reaches the model. Mitigated by T1 to T3 controls, which do not depend on it. The LoRA runs in `finetune/` measure whether training helps the model ignore instructions in sources; they are not served by default and are not counted as a control.
-- The number check reads digits. A secret spelled out in words would pass it. Mitigated by keeping other tenants' records out of the prompt.
+- The number check reads digits and English number words. A secret in another encoding (Roman numerals, another language, split across sentences) would pass it. Mitigated by keeping other tenants' records out of the prompt.
 - Citation support is lexical, not entailment. A sentence about the same purchase request can be cited for a claim it does not state.
 - A wrong but plausible answer built only from permitted sources is still possible with a small model. The citations let a reader check it quickly.

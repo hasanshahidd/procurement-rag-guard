@@ -73,7 +73,7 @@ pytest --cov=app --cov=repro --cov-report=term-missing
 
 | Requirement | Where |
 |---|---|
-| FastAPI service, Pydantic schemas, `GET /health`, `POST /tickets` (alias `/ingest`), `POST /ask` | `app/main.py`, `app/schemas.py` |
+| FastAPI service, Pydantic schemas, `GET /health`, `POST /tickets` (alias `/ingest`), `POST /ask` | `app/main.py`, `app/routes.py`, `app/errors.py`, `app/schemas.py` |
 | Validation and clear API errors | strict schemas with `extra="forbid"`, one error envelope for 401/403/404/405/409/422/429/500/503 |
 | 8+ synthetic records with outdated, conflicting and forged evidence | `data/seed/` (14 documents, 3 tool responses, 4 demo principals) |
 | Named open-weight model running locally | Ollama `qwen2.5:1.5b` by default, or in-process `Qwen/Qwen2.5-0.5B-Instruct` via transformers (`app/llm.py`) |
@@ -89,7 +89,7 @@ pytest --cov=app --cov=repro --cov-report=term-missing
 
 ```
              X-API-Key
-  client ─────────────────▶ FastAPI (app/main.py)
+  client ─────────────────▶ FastAPI (app/routes.py)
                               │  authenticate key -> Principal(tenant, role)
                               │  (body fields such as tenant_id are rejected with 422)
                               ▼
@@ -352,7 +352,7 @@ pytest -m live -v                        # against the real model (Ollama runnin
 ruff check app repro tests finetune      # lint
 ```
 
-Last local run: 233 passed, 1 expected failure (the documented spelled-out-number gap), 2 live tests passed against `qwen2.5:1.5b`, 93% line coverage over `app/` and `repro/`, ruff clean. The uncovered lines are mostly the transformers model loading path and the reproduction script's CLI, which are exercised by real runs (`finetune/`, `reports/injection_repro.md`) rather than the unit suite.
+Last local run: 241 passed, 2 live tests passed against `qwen2.5:1.5b`, 93% line coverage over `app/` and `repro/`, ruff clean. The uncovered lines are mostly the transformers model loading path and the reproduction script's CLI, which are exercised by real runs (`finetune/`, `reports/injection_repro.md`) rather than the unit suite.
 
 | File | Covers |
 |---|---|
@@ -454,7 +454,7 @@ Exact commands for every run, per-row predictions and confusion matrices are in 
 - **Storage is SQLite or memory.** Set `DB_PATH` to keep ingested records across restarts. A multi-instance deployment would use Postgres with row-level security as a second enforcement point.
 - **Retrieval is built for a small corpus.** The BM25 index is rebuilt per request and embeddings are cached in process memory. That is fine for hundreds of records. Thousands would need a persistent vector index partitioned per tenant.
 - **The guard is a pattern list.** It catches the scenario payload and common variants, not every possible phrasing or language. The other layers are designed not to rely on it.
-- **The number check reads digits, not words.** A number spelled out in words ("one thousand and forty five") is not checked, which is one reason other tenants' records never enter the prompt in the first place. This gap is recorded as an `xfail` test so it stays visible. The check can also block a correct answer that does arithmetic on the sources (for example a computed total), which is the safe failure.
+- **The number check reads digits and English number words.** "1,045", "1 045" and "one thousand and forty five" are all caught. Other encodings (Roman numerals, another language's number words, a value split across sentences) are not, which is one reason other tenants' records never enter the prompt in the first place. The check can also block a correct answer that does arithmetic on the sources (for example a computed total), which is the safe failure.
 - **Citation support is lexical.** A cited sentence must share an id, a number or two words with the answer. That rejects citations that are merely in context, and figures must match the item they belong to, but it is not entailment: a sentence about the same PR can still be cited for a claim it does not state. An NLI model or a second LLM judge would tighten it.
 - **Approval wording is a vocabulary.** The approval-claim check is default deny over that vocabulary ("approved", "cleared", "go-ahead", "good to go", "may proceed", "signed off", "OK'd", "approval granted"), with narrow exemptions for negations, rules and conditions. A synonym outside the list would need adding. A small classifier would generalise better; a word list is easy to audit.
 - **The name check is a capitalisation heuristic.** A company typed in lower case is not detected, and the first word of a sentence is skipped because it is capitalised anyway, so a one-word name at the very start of a question is not checked either. In both cases the other tenant's records are still never retrieved. A capitalised word in mid-sentence that no record contains causes an abstention. It only ever compares against the caller's own records, which is what keeps it from revealing the customer list.
@@ -467,7 +467,9 @@ Exact commands for every run, per-row predictions and confusion matrices are in 
 
 ```
 app/
-  main.py         FastAPI app, auth dependency, error handlers, rate limiter
+  main.py         app factory: builds the services and wires the router
+  routes.py       endpoints, auth dependency, rate limiter, record creation rules
+  errors.py       one error format and its exception handlers
   schemas.py      Pydantic request and response models
   store.py        documents, principals, tenant and role visibility
   retrieval.py    BM25 and hybrid rank fusion over visible documents

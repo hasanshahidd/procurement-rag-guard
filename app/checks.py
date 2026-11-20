@@ -97,14 +97,48 @@ def _number_candidates(group: str) -> set[str]:
     return candidates
 
 
+_UNITS = {
+    w: i
+    for i, w in enumerate(
+        "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
+        "seventeen eighteen nineteen".split()
+    )
+}
+_TENS = {w: 10 * i for i, w in enumerate("_ _ twenty thirty forty fifty sixty seventy eighty ninety".split()) if i > 1}
+_SCALES = {"thousand": 1_000, "million": 1_000_000}
+
+
+def spelled_numbers(text: str) -> set[str]:
+    """Numbers written in words, as digit strings: "one thousand and forty-five" gives "1045"."""
+    found: set[str] = set()
+    total = current = 0
+    seen = False
+    for word in [*re.findall(r"[a-z]+", text.lower()), ""]:
+        if word in _UNITS or word in _TENS:
+            current += _UNITS.get(word, 0) + _TENS.get(word, 0)
+            seen = True
+        elif seen and word == "hundred":
+            current *= 100
+        elif seen and word in _SCALES:
+            total, current = total + current * _SCALES[word], 0
+        elif seen and word == "and":
+            continue
+        else:
+            if seen:
+                found.add(str(total + current))
+            total = current = 0
+            seen = False
+    return found
+
+
 def ungrounded_numbers(answer: str, allowed: set[str]) -> set[str]:
-    """Numbers (3+ digits) in the answer that are in no source shown to the model and not in the question.
+    """Numbers (3+ digits, or spelled out in words) in the answer that are in no source shown and not in the question.
 
     An allowlist on purpose: the decision never looks at other tenants' data, so
     whether an answer passes cannot be used to probe hidden values, and it also
     catches figures the model made up.
     """
-    found: set[str] = set()
+    found = {n for n in spelled_numbers(answer) if len(n) >= 3} - allowed
     for m in _NUM_GROUP.finditer(ascii_digits(answer)):
         found |= _number_candidates(m.group(0)) - allowed
     return found

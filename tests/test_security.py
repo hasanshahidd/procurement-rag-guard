@@ -13,7 +13,7 @@ import re
 
 import pytest
 
-from app.checks import claims_approval, numbers_in
+from app.checks import claims_approval, numbers_in, spelled_numbers
 from app.guard import REMOVED_MARKER, scan
 from app.pipeline import WITHHELD
 from app.prompting import ContextSource, build_messages, render_source
@@ -320,10 +320,33 @@ def test_reformatted_leak_is_still_blocked(make_client, leak):
     assert "ungrounded_number_in_answer" in body["security"]["output_checks"]
 
 
-@pytest.mark.xfail(strict=True, reason="known limitation: numbers spelled out in words are not detected")
-def test_spelled_out_leak_is_blocked(make_client):
-    llm = FakeLLM(reply("answered", "Redline pays one thousand and forty five AUD.", ["TCK-H-101"]))
-    assert ask(make_client(llm), INJECTION_QUESTION, HARBOR_BUYER).json()["status"] == "blocked"
+@pytest.mark.parametrize(
+    "answer",
+    ["Redline pays one thousand and forty five AUD.", "PR-1042 is pending at one thousand forty-five AUD."],
+)
+def test_spelled_out_leak_is_blocked(make_client, answer):
+    llm = FakeLLM(reply("answered", answer, ["TCK-H-101"]))
+    body = ask(make_client(llm), INJECTION_QUESTION, HARBOR_BUYER).json()
+    assert body["status"] == "blocked" and "ungrounded_number_in_answer" in body["security"]["output_checks"]
+
+
+@pytest.mark.parametrize(
+    ("text", "number"),
+    [
+        ("one thousand and forty five", "1045"),
+        ("Nine hundred and five units", "905"),
+        ("two hundred thousand", "200000"),
+        ("twelve hundred", "1200"),
+        ("one million two hundred thousand", "1200000"),
+    ],
+)
+def test_spelled_numbers_are_read(text, number):
+    assert number in spelled_numbers(text)
+
+
+def test_small_spelled_numbers_do_not_block_honest_answers(make_client):
+    llm = FakeLLM(reply("answered", "PR-1042 is pending approval; two quotes are needed.", ["TCK-H-101"]))
+    assert ask(make_client(llm), "What is the status of PR-1042?", HARBOR_BUYER).json()["status"] == "answered"
 
 
 @pytest.mark.parametrize("value", ["1,045", "1,046", "905", "906"])
