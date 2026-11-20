@@ -12,7 +12,7 @@ from app.prompting import STATUSES, parse_model_output
 from finetune import build_dataset as bd
 from finetune.common import epoch_order, parse_oversample
 from finetune.evaluate import aggregate, score_prediction
-from finetune.summary import select_run, write_summary
+from finetune.summary import select_run, write_seed_summary, write_summary
 
 DATA = bd.DATA_DIR
 SEED_TERMS = ("Harbor Point", "Redline", "Bluegate", "Kite Office", "LAP-14-STD", "TAB-10-RUG", "Eastgate")
@@ -179,3 +179,25 @@ def test_selection_rule_order_and_tie_breaks() -> None:
     assert select_run([base, col("a", 0.4, 0.9, 0.9), col("b", 0.5, 0.1, 0.1)])["label"] == "b"
     assert select_run([col("a", 0.5, 0.6, 0.1), col("b", 0.5, 0.5, 0.9)])["label"] == "a"
     assert select_run([col("a", 0.5, 0.5, 0.2), col("b", 0.5, 0.5, 0.3)])["label"] == "b"
+
+
+RESULTS = Path(__file__).resolve().parents[1] / "finetune" / "results"
+
+
+@pytest.mark.parametrize(("accuracies", "beats"), [((0.4, 0.5, 0.6), False), ((0.5, 0.5, 0.5), True)])
+def test_seed_summary_reports_mean_sd_and_the_rule(tmp_path: Path, accuracies, beats) -> None:
+    base = json.loads((RESULTS / "run2_metrics.json").read_text(encoding="utf-8"))
+    (tmp_path / "run2_metrics.json").write_text(json.dumps(base), encoding="utf-8")
+    for i, acc in enumerate(accuracies, start=1):
+        col = {**base, "name": f"s{i}", "label": f"Seed {i}", "status_accuracy": acc}
+        if beats:  # perfect conflict precision and recall lifts macro F1 above run 2's
+            per = {k: dict(v) for k, v in base["status_per_class"].items()}
+            per["conflict"].update(precision=1.0, recall=1.0)
+            col["status_per_class"] = per
+        (tmp_path / f"s{i}_metrics.json").write_text(json.dumps(col), encoding="utf-8")
+    text = write_seed_summary(tmp_path, ["run2"], ["s1", "s2", "s3"], "cmd", beat="run2").read_text(encoding="utf-8")
+    mean = sum(accuracies) / 3
+    sd = 0.1 if len(set(accuracies)) > 1 else 0.0
+    seeds = " | ".join(f"{a:.3f}" for a in accuracies)
+    assert f"| Status accuracy | 0.457 | {seeds} | {mean:.3f} ± {sd:.3f} |" in text
+    assert ("Higher, so" in text) is beats and ("Not higher, so" in text) is not beats

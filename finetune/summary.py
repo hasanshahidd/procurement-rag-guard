@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import statistics
 from datetime import date
 from pathlib import Path
 
@@ -216,6 +217,63 @@ def comparison(cols: list[dict]) -> list[str]:
         lines += [f"- {k}: {'; '.join(v)}" for k, v in groups.items() if v]
         lines.append("")
     return lines
+
+
+def mean_sd(values: list[float | None]) -> str:
+    """Mean and sample standard deviation of the defined values."""
+    vals = [v for v in values if v is not None]
+    if not vals:
+        return "n/a"
+    sd = statistics.stdev(vals) if len(vals) > 1 else 0.0
+    return f"{statistics.mean(vals):.3f} ± {sd:.3f}"
+
+
+def write_seed_summary(
+    out_dir: Path, refs: list[str], seeds: list[str], summary_cmd: str, beat: str | None = None
+) -> Path:
+    """seeds_summary.md: one column per seed of the same settings, their mean and spread, and reference columns.
+
+    No seed is singled out. With beat, the rule fixed before training is applied to the seed mean of status
+    macro F1 against that column.
+    """
+
+    def load(name: str) -> dict:
+        return with_macro_f1(json.loads((out_dir / f"{name}_metrics.json").read_text(encoding="utf-8")))
+
+    ref_cols, seed_cols = [load(n) for n in refs], [load(n) for n in seeds]
+    head = ["Metric", *(column_title(c) for c in ref_cols), *(c["label"] for c in seed_cols), "Mean ± sd over seeds"]
+    lines = [
+        f"# LoRA seeds: results on `{seed_cols[0]['generation']['heldout']}`",
+        "",
+        f"Summary written {date.today().isoformat()} from the metrics files in this folder. Every seed uses the "
+        f"same data and settings; sd is the sample standard deviation over {len(seed_cols)} seeds.",
+        "",
+        "| " + " | ".join(head) + " |",
+        "|" + "---|" * len(head),
+    ]
+    for title, path in METRICS:
+        vals = [pick(c, path) for c in seed_cols]
+        cells = [title, *(fmt(pick(c, path)) for c in ref_cols), *(fmt(v) for v in vals), mean_sd(vals)]
+        lines.append("| " + " | ".join(cells) + " |")
+    if beat:
+        target = load(beat)
+        mean = statistics.mean(c["status_macro_f1"] for c in seed_cols)
+        outcome = (
+            f"Higher, so under the rule fixed before training {seed_cols[0]['label']} becomes the standard adapter."
+            if mean > target["status_macro_f1"]
+            else f"Not higher, so under the rule fixed before training {target['label']} stays the standard adapter."
+        )
+        lines += [
+            "",
+            "## Standard adapter rule",
+            "",
+            f"Mean status macro F1 over seeds {mean:.3f} against {target['label']} {target['status_macro_f1']:.3f}: "
+            + outcome,
+        ]
+    lines += ["", "## Command", "", "```", summary_cmd, "```", ""]
+    path = out_dir / "seeds_summary.md"
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
 
 
 def write_summary(out_dir: Path, names: list[str], summary_cmd: str, note: str = "") -> Path:

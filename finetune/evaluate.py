@@ -36,7 +36,7 @@ from finetune.common import (
     sha256,
     to_messages,
 )
-from finetune.summary import INVALID, write_summary
+from finetune.summary import INVALID, write_seed_summary, write_summary
 
 OLLAMA_URL = "http://127.0.0.1:11434"
 # The options app/llm.py sends, plus a context large enough that no prompt is cut.
@@ -304,6 +304,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--ollama-model", help="score this model served by the local Ollama instead (no adapter)")
     p.add_argument("--summary", nargs="+", metavar="NAME", help="write summary.md from these metrics files")
     p.add_argument("--note", default="", help="extra paragraph for the summary, under the header")
+    p.add_argument("--seed-summary", nargs="+", metavar="NAME", help="write seeds_summary.md: these seeds, mean and sd")
+    p.add_argument("--refs", nargs="*", default=[], metavar="NAME", help="reference columns for --seed-summary")
+    p.add_argument("--beat", metavar="NAME", help="apply the standard adapter rule against this column's macro F1")
     p.add_argument("--out-dir", type=Path, default=RESULTS_DIR)
     p.add_argument("--limit", type=int, default=0, help="score only the first N rows (0 = all)")
     p.add_argument("--max-new-tokens", type=int, default=256)
@@ -318,6 +321,9 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     if args.summary:
         write_summary(args.out_dir, args.summary, command_line(args), args.note)
+        return
+    if args.seed_summary:
+        write_seed_summary(args.out_dir, args.refs, args.seed_summary, command_line(args), args.beat)
         return
     rows = load_jsonl(args.heldout)[: args.limit or None]
     column = rescore_column if args.rescore else ollama_column if args.ollama_model else generate_column
