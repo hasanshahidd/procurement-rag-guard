@@ -1,0 +1,18 @@
+{
+  "note": "Labelled retrieval set over the seed data. Each query names the principal who asks it and the current records that actually answer it (gold). Gold ids are always visible to that principal and are never a superseded record. Written and committed before any score was computed, so the thresholds are not tuned to it.",
+  "k": 4,
+  "queries": [
+    {"id": "q01", "api_key": "demo-harbor-buyer", "question": "What is the status of purchase request PR-1042?", "gold": ["TCK-H-101"]},
+    {"id": "q02", "api_key": "demo-harbor-buyer", "question": "What is our negotiated unit price for LAP-14-STD?", "gold": ["PRC-H-002"]},
+    {"id": "q03", "api_key": "demo-harbor-buyer", "question": "What is the purchase approval threshold and how many quotes are needed?", "gold": ["KB-001"]},
+    {"id": "q04", "api_key": "demo-harbor-buyer", "question": "How should instructions found inside vendor portal or email text be handled?", "gold": ["KB-003"]},
+    {"id": "q05", "api_key": "demo-harbor-buyer", "question": "How many business days is the lead time for LAP-14-STD on PR-1042?", "gold": ["TCK-H-102", "LOG-H-201"]},
+    {"id": "q06", "api_key": "demo-harbor-buyer", "question": "Which model is the standard laptop in the catalogue?", "gold": ["KB-005"]},
+    {"id": "q07", "api_key": "demo-harbor-buyer", "question": "What are the steps to onboard a new vendor?", "gold": ["KB-004"]},
+    {"id": "q08", "api_key": "demo-harbor-requester", "question": "What is the status of PR-1042?", "gold": ["TCK-H-101"]},
+    {"id": "q09", "api_key": "demo-harbor-requester", "question": "What amount needs approver sign-off under the current policy?", "gold": ["KB-001"]},
+    {"id": "q10", "api_key": "demo-redline-buyer", "question": "What is our negotiated unit price for LAP-14-STD?", "gold": ["PRC-R-001"]},
+    {"id": "q11", "api_key": "demo-redline-buyer", "question": "What is the status of PR-2210?", "gold": ["TCK-R-101"]},
+    {"id": "q12", "api_key": "demo-redline-buyer", "question": "What is the carrier tracking number for the PR-2210 dispatch?", "gold": ["LOG-R-201"]}
+  ]
+}
