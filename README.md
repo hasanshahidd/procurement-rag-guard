@@ -110,6 +110,16 @@ pytest --cov=app --cov=repro --cov-report=term-missing
 
 Retrieval fuses two rankers with reciprocal rank fusion: BM25 for exact ids and SKUs (`PR-1042`, `LAP-14-STD`), and cosine similarity over `nomic-embed-text` embeddings for paraphrases ("How long until the new clinic computers arrive?" has no keyword in common with the ticket that answers it). A record is a candidate when BM25 scores at least 1.0 or cosine similarity is at least 0.6. That threshold was measured on this corpus: on-topic questions score 0.70 to 0.80 and off-topic questions at most 0.51. If the embedding model is down or sends a malformed reply, retrieval falls back to BM25 and the trace says so. Both rankers only ever see the caller's visible records.
 
+**Retrieval quality (measured).** `data/retrieval_eval.json` labels 12 queries with the records that answer them, each asked as the principal who asks it. `python -m repro.retrieval_eval` scores both modes; the full table is in [`reports/retrieval_eval.md`](reports/retrieval_eval.md).
+
+| Metric | Keyword (BM25) | Hybrid (BM25 + embeddings) |
+|---|---|---|
+| Recall@4 | 1.000 | 1.000 |
+| MRR | 0.875 | 0.875 |
+| Hit@1 | 0.750 | 0.750 |
+
+Both modes retrieve every answering record into the top 4. On this 14-record, id-and-term-heavy corpus BM25 is already at the ceiling, so embeddings add no measurable gain and are one place behind keyword on the single query with two gold records. The honest reading is that the hybrid layer earns its place on paraphrased questions and a larger corpus, not on a set this small; the number is here to show retrieval is correct and to keep that claim measurable, not to manufacture a win. The query set was committed before any score was computed, so the thresholds are not tuned to it.
+
 The agents are plain functions, not separate processes. Each one writes a line into the `agents` field of the response so the path of a request is visible in the demo and in the audit log.
 
 The design rule is that the model is never trusted with a security decision. It cannot pick tools, it cannot see records outside the caller's permissions, and nothing it writes is executed. If it is fully taken over by injected text, the worst it can do is produce a bad answer, and the verifier catches the bad answers that matter here (leaked values, fake approvals, citations to sources it was not given).
@@ -353,7 +363,7 @@ pytest -m e2e -v                         # browser tests of the web UI (once: py
 ruff check app repro tests finetune      # lint
 ```
 
-Last local run: 250 passed (including 3 browser tests and the 4 checkpoint resume tests, which need `requirements-ml.txt` and skip without it), 2 live tests passed against `qwen2.5:1.5b`, 93% line coverage over `app/` and `repro/`, ruff clean. The uncovered lines are mostly the transformers model loading path and the reproduction script's CLI, which are exercised by real runs (`finetune/`, `reports/injection_repro.md`) rather than the unit suite.
+Last local run: 253 passed (including 3 browser tests and the 4 checkpoint resume tests, which need `requirements-ml.txt` and skip without it), 2 live tests passed against `qwen2.5:1.5b`, 90% line coverage over `app/` and `repro/`, ruff clean. The uncovered lines are mostly the transformers model loading path and the two reproduction scripts' CLIs, which are exercised by real runs (`finetune/`, `reports/injection_repro.md`, `reports/retrieval_eval.md`) rather than the unit suite.
 
 | File | Covers |
 |---|---|
@@ -362,6 +372,7 @@ Last local run: 250 passed (including 3 browser tests and the 4 checkpoint resum
 | `tests/test_failures.py` | malformed model output, model outage (503), unexpected errors (500), Ollama client error mapping, audit log |
 | `tests/test_security.py` | injection variants, false positives on real policy text, compromised-model regression, cross-tenant ingest attack, naive vs guarded reproduction |
 | `tests/test_hybrid_and_storage.py` | hybrid retrieval finds paraphrases, still abstains off topic, only ranks visible records, falls back to BM25, embedding cache, SQLite persistence across restarts |
+| `tests/test_retrieval_eval.py` | recall@k, MRR and hit@1 maths; the labelled retrieval set's gold records are visible to each caller and current |
 | `tests/test_finetune_dataset.py` | fine-tuning data contract, train and held-out disjointness, deterministic generation |
 | `tests/test_finetune_resume.py` | an interrupted LoRA run resumes from its checkpoint to the same weights and loss log (toy model, skipped without torch) |
 | `tests/test_live_llm.py` | same security properties against the real model (marked `live`, skipped by default) |
@@ -466,7 +477,7 @@ Exact commands for every run, per-row predictions and confusion matrices are in 
 ## Known limitations
 
 - **Storage is SQLite or memory.** Set `DB_PATH` to keep ingested records across restarts. A multi-instance deployment would use Postgres with row-level security as a second enforcement point.
-- **Retrieval is built for a small corpus.** The BM25 index is rebuilt per request and embeddings are cached in process memory. That is fine for hundreds of records. Thousands would need a persistent vector index partitioned per tenant.
+- **Retrieval is built for a small corpus, and measured on one.** The BM25 index is rebuilt per request and embeddings are cached in process memory. That is fine for hundreds of records; thousands would need a persistent vector index partitioned per tenant. On the 14-record demo corpus keyword search already reaches recall@4 of 1.000 (`reports/retrieval_eval.md`), so the embedding ranker cannot be shown to help here; its value on paraphrases and a larger corpus is argued, not measured, because a realistic corpus and a bigger labelled set are out of scope for a take-home.
 - **The guard is a pattern list.** It catches the scenario payload and common variants, not every possible phrasing or language. The other layers are designed not to rely on it.
 - **The number check reads digits and English number words.** "1,045", "1 045" and "one thousand and forty five" are all caught. Other encodings (Roman numerals, another language's number words, a value split across sentences) are not, which is one reason other tenants' records never enter the prompt in the first place. The check can also block a correct answer that does arithmetic on the sources (for example a computed total), which is the safe failure.
 - **Citation support is lexical.** A cited sentence must share an id, a number or two words with the answer. That rejects citations that are merely in context, and figures must match the item they belong to, but it is not entailment: a sentence about the same PR can still be cited for a claim it does not state. An NLI model or a second LLM judge would tighten it.
