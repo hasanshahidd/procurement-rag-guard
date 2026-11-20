@@ -349,10 +349,11 @@ A 1.5B model at these settings follows the payload only occasionally, and larger
 pytest                                   # fast suite, no model needed
 pytest --cov=app --cov=repro             # with coverage
 pytest -m live -v                        # against the real model (Ollama running)
+pytest -m e2e -v                         # browser tests of the web UI (once: python -m playwright install chromium)
 ruff check app repro tests finetune      # lint
 ```
 
-Last local run: 241 passed, 2 live tests passed against `qwen2.5:1.5b`, 93% line coverage over `app/` and `repro/`, ruff clean. The uncovered lines are mostly the transformers model loading path and the reproduction script's CLI, which are exercised by real runs (`finetune/`, `reports/injection_repro.md`) rather than the unit suite.
+Last local run: 244 passed (including 3 browser tests), 2 live tests passed against `qwen2.5:1.5b`, 93% line coverage over `app/` and `repro/`, ruff clean. The uncovered lines are mostly the transformers model loading path and the reproduction script's CLI, which are exercised by real runs (`finetune/`, `reports/injection_repro.md`) rather than the unit suite.
 
 | File | Covers |
 |---|---|
@@ -363,6 +364,7 @@ Last local run: 241 passed, 2 live tests passed against `qwen2.5:1.5b`, 93% line
 | `tests/test_hybrid_and_storage.py` | hybrid retrieval finds paraphrases, still abstains off topic, only ranks visible records, falls back to BM25, embedding cache, SQLite persistence across restarts |
 | `tests/test_finetune_dataset.py` | fine-tuning data contract, train and held-out disjointness, deterministic generation |
 | `tests/test_live_llm.py` | same security properties against the real model (marked `live`, skipped by default) |
+| `tests/test_ui_e2e.py` | the web UI in a real browser (Playwright, scripted model): the poisoned quote shows what was removed and the struck-out text, another company's question is refused, New chat resets, the phone layout has no sideways scroll and a working menu |
 
 ## Local model
 

@@ -13,5 +13,6 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements-dev.txt
+      - run: python -m playwright install --with-deps chromium
       - run: ruff check app repro tests finetune
       - run: pytest --cov=app --cov=repro --cov-report=term-missing
