@@ -102,7 +102,7 @@ def save_checkpoint(path: Path, model, opt, sched, rng: random.Random, position:
 def load_checkpoint(path: Path, model, opt, sched, rng: random.Random, signature: dict) -> dict | None:
     if not path.exists():
         return None
-    state = torch.load(path, weights_only=False)  # our own file, written by save_checkpoint
+    state = torch.load(path, weights_only=True)  # tensors and plain values only: a tampered file cannot run code
     if state["signature"] != signature:
         raise SystemExit(f"{path} was written with different settings or data; delete it to start this run fresh")
     with torch.no_grad():
