@@ -28,7 +28,8 @@ Opening the flagged tool result shows exactly what the guard removed before the 
 | The controls | `app/store.py` (tenant and role filter), `app/guard.py` (untrusted text), `app/checks.py` (verifier checks) |
 | The key regression test | `tests/test_security.py::test_compromised_model_cannot_leak_cite_or_approve` (model fully obeys the attack; nothing leaks or gets approved) |
 | The incident, reproduced | `reports/injection_repro.md` (naive vs guarded, sampled, with a control) |
-| Fine-tuning evidence | `finetune/results/summary.md` and the section below |
+| Fine-tuning evidence | `finetune/results/summary.md`, `finetune/results/seeds_summary.md` and the section below |
+| Retrieval quality | `reports/retrieval_eval.md` (recall@4, MRR, hit@1, keyword vs hybrid) |
 | Threats and their tests | `docs/threat-model.md` |
 
 ## Quick start
@@ -77,12 +78,12 @@ pytest --cov=app --cov=repro --cov-report=term-missing
 | Validation and clear API errors | strict schemas with `extra="forbid"`, one error envelope for 401/403/404/405/409/422/429/500/503 |
 | 8+ synthetic records with outdated, conflicting and forged evidence | `data/seed/` (14 documents, 3 tool responses, 4 demo principals) |
 | Named open-weight model running locally | Ollama `qwen2.5:1.5b` by default, or in-process `Qwen/Qwen2.5-0.5B-Instruct` via transformers (`app/llm.py`) |
-| RAG with source ids and excerpts, abstention and conflict handling | hybrid BM25 plus `nomic-embed-text` retrieval (`app/retrieval.py`, `app/embeddings.py`), `app/pipeline.py` |
+| RAG with source ids and excerpts, abstention and conflict handling | hybrid BM25 plus `nomic-embed-text` retrieval (`app/retrieval.py`, `app/embeddings.py`), `app/pipeline.py`; retrieval measured in `reports/retrieval_eval.md` |
 | Runnable setup | `scripts/setup.ps1`, `scripts/setup.sh`, web UI at `/`, OpenAPI at `/docs` |
 | Untrusted sources, permissions enforced in code | `app/store.py`, `app/guard.py`, `app/pipeline.py` (verifier), `app/tools.py` |
 | Automated prompt-injection regression test | `tests/test_security.py` |
 | pytest for validation, retrieval, citations, failures, security | `tests/` |
-| LoRA demo: script, versions, train / held-out / test splits, baseline vs adapted, executed | `finetune/`, results in `finetune/results/summary.md` |
+| LoRA demo: script, versions, train / held-out / test splits, baseline vs adapted, executed | `finetune/`, results in `finetune/results/summary.md` and, over three seeds, `finetune/results/seeds_summary.md` |
 | Reproduction of the incident | `repro/injection_repro.py`, output in `reports/injection_repro.md` |
 
 ## Architecture
