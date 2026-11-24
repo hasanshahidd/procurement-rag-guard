@@ -169,15 +169,17 @@
   .verdict-reason { flex: 1 1 240px; font-size: 14px; color: var(--text-2); text-wrap: pretty; }
   .elapsed { font: 600 20px/1 var(--display); font-variant-numeric: tabular-nums; color: var(--text); }
   .answer { margin-top: 14px; max-width: 72ch; font: 400 18px/1.55 var(--display); letter-spacing: -0.005em; white-space: pre-wrap; overflow-wrap: anywhere; text-wrap: pretty; }
-  .verdict-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 16px; font-size: 12.5px; color: var(--muted); }
-  .sec-link { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 0; border-radius: 7px; cursor: pointer;
-    background: var(--tone-bg); color: var(--tone); box-shadow: inset 0 0 0 1px var(--tone-line); font-size: 12.5px; font-weight: 600;
-    transition: box-shadow 150ms ease-out; }
-  .sec-link:hover { box-shadow: inset 0 0 0 1px var(--tone); }
+  .reply-time { margin-left: auto; font-size: 12.5px; color: var(--muted); }
   .story-head { margin-top: 18px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
   .story { list-style: none; padding: 0; margin-top: 8px; display: grid; gap: 8px; }
   .story-item { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 10px; font-size: 14px;
     background: var(--tone-bg); box-shadow: inset 0 0 0 1px var(--tone-line); color: var(--text); text-wrap: pretty; }
+  .based-on { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .story-item.has-extra { align-items: flex-start; }
+  .removed-preview { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: var(--bad-bg); box-shadow: inset 0 0 0 1px var(--bad-line); font-size: 13.5px; }
+  .removed-preview:empty { display: none; }
+  .removed-preview del { color: var(--bad); }
+  .removed-head { font-weight: 600; color: var(--bad); margin-bottom: 4px; }
   .story-icon { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: var(--surface); color: var(--tone); }
   .skeleton { display: grid; gap: 10px; margin-top: 12px; }
   .skeleton span { display: block; height: 16px; border-radius: 6px; background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2)); background-size: 200% 100%; animation: shimmer 1.4s ease-in-out infinite; }
@@ -591,10 +593,10 @@ const SCENARIOS = [
 const SUGGESTIONS = ['Poisoned vendor quote', "Another tenant's price", 'Outdated policy', 'Conflicting ship dates'];
 
 const STATUS = {
-  answered: { label: 'Answered', tone: 'ok', reason: 'Every claim cites a source and the output checks passed.' },
-  conflict: { label: 'Conflict', tone: 'conflict', reason: 'Sources disagree, so each value is shown with its source.' },
-  abstained: { label: 'Abstained', tone: 'info', reason: 'Not enough evidence to answer.' },
-  blocked: { label: 'Blocked', tone: 'bad', reason: 'The verifier withheld the answer.' },
+  answered: { label: 'Answered', tone: 'ok', reason: 'Checked against your records before it was shown.' },
+  conflict: { label: 'Conflict', tone: 'conflict', reason: 'Your records disagree, so each value is shown with where it came from.' },
+  abstained: { label: 'Abstained', tone: 'info', reason: 'Your records do not have enough information to answer this.' },
+  blocked: { label: 'Blocked', tone: 'bad', reason: 'The answer failed a safety check, so it was hidden.' },
 };
 
 const REASONS = {
@@ -656,7 +658,7 @@ const ICONS = {
 };
 
 // Every turn renders with its own id prefix (uid), so ids never collide across turns.
-const state = { running: false, timer: null, drawerSeq: 0, turnSeq: 0, autoOpened: null };
+const state = { running: false, timer: null, drawerSeq: 0, turnSeq: 0 };
 
 const $ = (id) => document.getElementById(id);
 const list = (value) => (Array.isArray(value) ? value : []);
@@ -849,7 +851,6 @@ function newChat() {
   if (state.running) return;
   $('turns').replaceChildren();
   $('welcome').hidden = false;
-  state.autoOpened = null;
   $('question').value = '';
   syncScenario();
   fitComposer();
@@ -872,7 +873,6 @@ async function onAsk(event) {
   const who = currentPrincipal();
   const topK = Number($('top-k').value);
   const uid = 't' + (++state.turnSeq) + '-';
-  collapseAutoOpened();
   const turn = turnView(who, question);
   const loading = loadingView(uid);
   turn.reply.append(loading.card);
@@ -914,11 +914,6 @@ function setRunning(on, started, elapsedNode) {
   state.timer = setInterval(tick, 250);
 }
 
-// Details auto-open only on the newest turn, so collapse the previous one unless the user touched it.
-function collapseAutoOpened() {
-  if (state.autoOpened) state.autoOpened(false);
-  state.autoOpened = null;
-}
 
 function turnView(who, question) {
   const reply = el('div', { class: 'msg-assistant' });
@@ -963,78 +958,98 @@ function securityTone(r) {
 
 function resultView(r, who, secs, uid) {
   const info = STATUS[r.status] || STATUS.abstained;
-  const details = tabsView(r, who, uid);
+  // The card states each fact once; the step-by-step and technical views stay behind "Show details".
+  const details = el('div', { id: uid + 'more' }, pipelineView(r, null, uid), tabsView(r, who, uid));
+  details.hidden = true;
   const toggleLabel = el('span', {}, 'Show details');
-  const setDetails = (open) => {
-    toggle.setAttribute('aria-expanded', String(open));
-    toggleLabel.textContent = open ? 'Hide details' : 'Show details';
-    details.hidden = !open;
-  };
-  const claim = () => { if (state.autoOpened === setDetails) state.autoOpened = null; };
   const toggle = el('button', { type: 'button', class: 'btn btn-ghost btn-sm details-toggle', 'aria-controls': details.id,
-    onclick: () => { claim(); setDetails(toggle.getAttribute('aria-expanded') !== 'true'); } }, toggleLabel, icon('chevron', 16));
-  const showSecurity = () => { claim(); setDetails(true); selectTab(details, 'security', true); };
-  const autoOpen = r.status === 'blocked' || list((r.security || {}).flagged_sources).length > 0;
-  setDetails(autoOpen);
-  if (autoOpen) state.autoOpened = setDetails;
+    'aria-expanded': 'false', onclick: () => {
+      const open = toggle.getAttribute('aria-expanded') !== 'true';
+      toggle.setAttribute('aria-expanded', String(open));
+      toggleLabel.textContent = open ? 'Hide details' : 'Show details';
+      details.hidden = !open;
+    } }, toggleLabel, icon('chevron', 16));
   return el('section', { class: 'reply', 'aria-labelledby': uid + 'verdict-h' },
     el('div', { class: 'verdict' },
       el('div', { class: 'verdict-top' },
         el('h2', { id: uid + 'verdict-h', class: 'badge tone-' + info.tone }, icon(TONE_ICON[info.tone], 14), info.label),
         el('p', { class: 'verdict-reason' }, reasonText(r))),
       el('p', { class: 'answer' }, r.answer),
-      storyView(r),
-      verdictMeta(r, secs, showSecurity)),
-    pipelineView(r, null, uid),
-    el('div', { class: 'reply-foot' }, toggle),
+      basedOn(r),
+      storyView(r, who)),
+    el('div', { class: 'reply-foot' }, toggle, secs == null ? null : el('span', { class: 'reply-time tnum' }, 'Took ' + secs + ' s')),
     details);
 }
 
+/* A record's readable name: its title, with a tool call shown as the supplier quote it is. */
+function sourceName(r, id) {
+  const c = list(r.citations).find((x) => x.source_id === id);
+  if (!c) return id.startsWith('TOOL-') ? 'the supplier quote' : id;
+  const vendor = /from (.+)$/.exec(c.title);
+  return c.kind === 'tool_output' && vendor ? 'the price quote from ' + vendor[1] : c.title;
+}
+
+function basedOn(r) {
+  const names = list(r.citations).map((c) => sourceName(r, c.source_id));
+  return names.length ? el('p', { class: 'based-on' }, 'Based on: ' + names.join(' · ')) : null;
+}
+
+/* The sentences the guard cut out of a flagged source, quoted so the reader sees the attack itself. */
+function removedPreview(id, who, heading) {
+  const box = el('div', { class: 'removed-preview' });
+  api('/sources/' + encodeURIComponent(id), {}, who).then((s) => {
+    const chars = Array.from(String(s.text));
+    const cut = list(s.flagged_spans).map((sp) => chars.slice(sp.start, sp.end).join('').trim()).filter(Boolean);
+    if (cut.length) box.replaceChildren(el('p', { class: 'removed-head' }, heading), ...cut.map((t) => el('p', {}, el('del', {}, t))));
+    else box.remove();
+  }).catch(() => box.remove()); // optional preview; "Show removed text" in Security reports any fetch error
+  return box;
+}
+
 /* Plain-language summary of what the safety steps did for this answer. */
-function storyLines(r) {
+function storyLines(r, who) {
   const sec = r.security || {};
   const ids = (items) => items.map((x) => x.source_id).join(', ');
   const lines = [];
   const flagged = list(sec.flagged_sources);
-  if (flagged.length) {
-    lines.push(['warn', 'alert', 'Hidden commands were found in ' + ids(flagged) + ' and cut out before the AI read ' + (flagged.length === 1 ? 'it' : 'them') + '.']);
+  const label = (id) => { const name = sourceName(r, id); return name === id ? id : name + ' (' + id + ')'; };
+  const removed = flagged.map((f) => removedPreview(f.source_id, who, flagged.length === 1 ? 'What was removed:' : 'Removed from ' + f.source_id + ':'));
+  if (flagged.length === 1) {
+    lines.push(['warn', 'alert', 'A hidden instruction was found in ' + label(flagged[0].source_id) + ' and removed before the AI read it. Nothing was approved or shared.', removed]);
+  } else if (flagged.length) {
+    lines.push(['warn', 'alert', 'Hidden instructions were found in ' + flagged.map((f) => label(f.source_id)).join(' and ') + ' and removed before the AI read them. Nothing was approved or shared.', removed]);
   }
   for (const b of list(sec.blocked_actions)) {
     lines.push(['bad', 'x', 'The AI tried to add an action (' + humanize(b.detail || 'unknown') + '). It was ignored: this assistant cannot act.']);
   }
   for (const c of list(sec.output_checks)) lines.push(['bad', 'x', 'Answer withheld. ' + (REASONS[c] || humanize(c))]);
   if (r.reason === 'question_names_unknown_entity') {
-    lines.push(['ok', 'lock', 'Other companies\' records are never searched for you, so their data cannot leak.']);
+    lines.push(['ok', 'lock', 'You can only search your own company\'s records, so other companies\' data cannot leak.']);
   }
-  if (list(r.conflicts).length) lines.push(['conflict', 'compare', 'The records disagree, so every value is shown with its source instead of a guess.']);
+  if (list(r.conflicts).length) lines.push(['conflict', 'compare', 'Your records disagree, so each value is shown with where it came from, instead of a guess.']);
   const outdated = list(r.excluded_sources);
-  if (outdated.length) lines.push(['info', 'info', 'Outdated record ' + ids(outdated) + ' was skipped; the newer one was used.']);
+  if (outdated.length) lines.push(['info', 'info', 'An older version of a record (' + ids(outdated) + ') was ignored; the newest one was used.']);
   const rejected = list(sec.rejected_citations).length;
-  if (rejected) lines.push(['info', 'info', plural(rejected, 'cited source') + ' did not back the answer and ' + (rejected === 1 ? 'was' : 'were') + ' dropped.']);
+  if (rejected) {
+    lines.push(['info', 'info', rejected === 1
+      ? 'The AI also pointed to a record that does not match its answer, so that reference was removed.'
+      : 'The AI also pointed to ' + rejected + ' records that do not match its answer, so those references were removed.']);
+  }
   if (r.status === 'answered' && !flagged.length && !list(sec.blocked_actions).length) {
-    lines.push(['ok', 'shieldCheck', 'No hidden commands, nothing leaked, and every claim points to a record.']);
+    lines.push(['ok', 'shieldCheck', 'No hidden instructions found. Every fact comes from one of your records.']);
   }
   return lines;
 }
 
-function storyView(r) {
-  const lines = storyLines(r);
+function storyView(r, who) {
+  const lines = storyLines(r, who);
   if (!lines.length) return null;
   return [
     el('p', { class: 'story-head' }, 'What happened'),
-    el('ul', { class: 'story' }, lines.map(([tone, ic, text]) =>
-      el('li', { class: 'story-item tone-' + tone }, el('span', { class: 'story-icon' }, icon(ic, 15)), el('span', {}, text)))),
+    el('ul', { class: 'story' }, lines.map(([tone, ic, text, extra]) =>
+      el('li', { class: 'story-item tone-' + tone + (extra ? ' has-extra' : '') },
+        el('span', { class: 'story-icon' }, icon(ic, 15)), el('div', {}, text, extra || null)))),
   ];
-}
-
-function verdictMeta(r, secs, onSecurity) {
-  const sec = r.security || {};
-  const issues = findingCount(sec);
-  return el('div', { class: 'verdict-meta' },
-    el('button', { type: 'button', class: 'sec-link tone-' + securityTone(r), onclick: onSecurity },
-      icon(issues ? 'alert' : 'shieldCheck', 14), issues ? 'See security details' : 'No security issues'),
-    el('span', { class: 'tnum' }, plural(list(r.citations).length, 'source') + ' cited'),
-    secs == null ? null : el('span', { class: 'tnum' }, secs + ' s'));
 }
 
 /* ---------- Defence pipeline ---------- */

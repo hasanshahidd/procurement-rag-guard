@@ -13,7 +13,7 @@ The service runs a local open-weight model through Ollama, uses hybrid retrieval
 
 All data in this repo is synthetic. The companies, people, prices and API keys were invented for this exercise.
 
-![Chat-style web UI answering the poisoned vendor quote question: cited answer, a plain-language summary of what the safety steps did, and the 5 safety steps with the hidden-command step flagged](docs/ui.png)
+![Chat-style web UI answering the poisoned vendor quote question: the cited answer, the records it is based on, and a plain-language summary showing the hidden instruction that was struck out before the AI read the quote](docs/ui.png)
 
 Opening the flagged tool result shows exactly what the guard removed before the model read it:
 
@@ -54,7 +54,7 @@ uvicorn app.main:create_app --factory --port 8000
 
 Then open:
 
-- http://127.0.0.1:8000/ for the web UI, laid out as a chat: pick a demo identity and a demo question in the sidebar, then read each answer with its "What happened" summary, the 5 safety steps, and (under Show details) citations with a Verify button, flagged sources, blocked actions and the agent trace;
+- http://127.0.0.1:8000/ for the web UI, laid out as a chat: pick a demo identity and a demo question in the sidebar, then read each answer with the records it is based on and a "What happened" summary (including any hidden instruction that was removed); Show details adds the 5 safety steps, citations with a Verify button, flagged sources, blocked actions and the raw response;
 - http://127.0.0.1:8000/docs for the OpenAPI explorer.
 
 There is also a terminal walkthrough of every scenario:

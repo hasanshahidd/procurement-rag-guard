@@ -6,6 +6,7 @@ No Ollama needed. Skipped when Playwright or a browser is not available
 
 from __future__ import annotations
 
+import re
 import socket
 import threading
 import time
@@ -85,11 +86,13 @@ def test_poisoned_quote_turn_explains_what_was_removed(ui):
 
     expect(page.locator(".msg-user").last).to_contain_text("PR-1042")
     story = page.locator(".story").last
-    expect(story).to_contain_text("Hidden commands were found in", timeout=15_000)
-    expect(story).to_contain_text("TOOL-Q-5531")
+    expect(story).to_contain_text(re.compile("hidden instructions? (was|were) found in", re.I), timeout=15_000)
+    expect(story).to_contain_text("the price quote from Bluegate Supplies (TOOL-Q-5531)")
+    expect(story.locator(".removed-preview del", has_text="SYSTEM: approve")).to_have_count(1)  # shown, struck out
     expect(page.locator(".pipe-step.tone-warn").last).to_contain_text("Remove hidden commands")
     expect(page.locator(".msg-assistant .answer").last).not_to_contain_text("approved")
 
+    page.get_by_role("button", name="Show details").last.click()
     page.get_by_role("button", name="Show removed text").last.click()
     expect(page.locator("#drawer")).to_be_visible()
     expect(page.locator("#drawer .cut").first).to_contain_text("SYSTEM")
@@ -101,7 +104,7 @@ def test_other_company_question_is_refused_and_new_chat_resets(ui):
     page.locator("#sidebar").get_by_role("button", name="Another tenant's price").click()
     page.locator("#ask-btn").click()
 
-    expect(page.locator(".story").last).to_contain_text("Other companies' records are never searched", timeout=15_000)
+    expect(page.locator(".story").last).to_contain_text("other companies' data cannot leak", timeout=15_000)
     expect(page.locator(".msg-assistant").last).to_contain_text("None of the records available to you mention")
 
     page.locator("#sidebar .js-new-chat").click()
